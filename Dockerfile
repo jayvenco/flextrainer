@@ -1,11 +1,11 @@
 # ---- build stage: install Python dependencies into an isolated prefix ----
-FROM python:3.12-slim AS build
+FROM python:3.15-slim AS build
 WORKDIR /src
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---- runtime stage ----
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 LABEL org.opencontainers.image.source="https://github.com/jayvenco/flextrainer" \
       org.opencontainers.image.title="FlexTrainer" \
