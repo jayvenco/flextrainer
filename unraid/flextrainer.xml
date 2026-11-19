@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>flextrainer</Name>
+  <Repository>ghcr.io/jayvenco/flextrainer:latest</Repository>
+  <Registry>https://github.com/jayvenco/flextrainer/pkgs/container/flextrainer</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/jayvenco/flextrainer/issues</Support>
+  <Project>https://github.com/jayvenco/flextrainer</Project>
+  <Overview>Self-hosted exam trainer. Upload PDF, Word or Markdown files (or scrape web pages) to turn them into practice exams, track your progress, resume where you left off and let ChatGPT check every question with a short explanation and a suggested reference link. All data lives in a SQLite database on your own server. First login after the first start: admin / admin (you must change it immediately).</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/jayvenco/flextrainer/main/unraid/flextrainer.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/jayvenco/flextrainer/main/unraid/icon.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <Config Name="WebUI port" Target="8000" Default="8888" Mode="tcp" Description="Port of the web interface (always 8000 inside the container)." Type="Port" Display="always" Required="true" Mask="false">8888</Config>
+  <Config Name="Data (database, backups, logs)" Target="/app/data" Default="/mnt/user/appdata/flextrainer/data" Mode="rw" Description="SQLite database, weekly backups, logs and the session secret. Keep this on the array/cache so updates never cost data." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/flextrainer/data</Config>
+  <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="Time zone, e.g. Europe/Amsterdam." Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID the app runs as (Unraid default 99 = nobody)." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID the app runs as (Unraid default 100 = users)." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="OPENAI_API_KEY" Target="OPENAI_API_KEY" Default="" Mode="" Description="Optional: ChatGPT API key for question checks. You can also enter it in the app under Settings." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="OPENAI_MODEL" Target="OPENAI_MODEL" Default="gpt-4o-mini" Mode="" Description="Optional: ChatGPT model used for checks." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="DEFAULT_THEME" Target="DEFAULT_THEME" Default="" Mode="" Description="Optional: theme for the first account (daylight, sand, midnight, nord, forest)." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="BACKUP_ENABLED" Target="BACKUP_ENABLED" Default="" Mode="" Description="Optional: automatic weekly backups on/off (true/false). Empty = on." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="BACKUP_KEEP" Target="BACKUP_KEEP" Default="" Mode="" Description="Optional: number of backups to keep. Empty = 7." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="BASE_URL" Target="BASE_URL" Default="" Mode="" Description="Optional: sub-path when served behind a reverse proxy, e.g. /flextrainer." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="ALLOW_PRIVATE_SCRAPE" Target="ALLOW_PRIVATE_SCRAPE" Default="" Mode="" Description="Optional: true lets the scraper fetch LAN/private addresses. Off by default." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+</Container>

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Exams · {{ app_name }}{% endblock %}
+{% block body %}
+<div class="hero row between">
+  <div><h1>Your exams</h1><p class="muted">Pick an exam to continue practising, or add one from your own material.</p></div>
+  <button class="btn" id="new-exam" type="button">+ New exam</button>
+</div>
+{% if not cards %}
+<div class="card empty"><h2>No exams yet</h2>
+  <p class="muted">Create an exam, then upload PDF, Word or Markdown files (or scrape a web page) to turn them into practice questions.</p>
+  <p><button class="btn" id="new-exam-2" type="button">Create your first exam</button></p></div>
+{% endif %}
+<div class="grid cards">
+  {% for c in cards %}
+  <article class="card exam-card">
+    <h2><a href="{{ base }}/exams/{{ c.id }}">{{ c.title }}</a></h2>
+    {% if c.description %}<p class="muted small">{{ c.description }}</p>{% endif %}
+    {% if c.total %}
+    <div class="bar" role="img" aria-label="{{ c.mastered }} of {{ c.total }} questions mastered"><i style="width:{{ (100 * c.mastered / c.total)|round|int }}%"></i></div>
+    <p class="small muted">{{ c.mastered }} / {{ c.total }} mastered · {{ c.attempted }} tried
+      {% if c.accuracy is not none %}· {{ c.accuracy }}% correct{% endif %}</p>
+    <p class="small">
+      {% if c.wrong %}<span class="pill bad">{{ c.wrong }} to review</span>{% endif %}
+      {% if c.disputed %}<span class="pill warn">{{ c.disputed }} disputed</span>{% endif %}
+      {% if c.verified == c.total %}<span class="pill ok">all checked</span>{% endif %}
+    </p>
+    {% else %}<p class="small muted">No questions yet.</p>{% endif %}
+    <div class="row">
+      {% if c.session %}<a class="btn" href="{{ base }}/practice/{{ c.session.id }}">Resume {{ c.session.answered }}/{{ c.session.total }}</a>
+      {% elif c.total %}<button class="btn" data-quick-start="{{ c.id }}" type="button">Practice</button>{% endif %}
+      <a class="btn ghost" href="{{ base }}/exams/{{ c.id }}">Open</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+<dialog id="exam-dialog"><form method="dialog" id="exam-form" class="dlg">
+  <h2>New exam</h2>
+  <label class="f" for="exam-title">Title</label><input id="exam-title" type="text" maxlength="200" required placeholder="e.g. AWS Cloud Practitioner">
+  <label class="f" for="exam-desc">Description (optional)</label><input id="exam-desc" type="text" maxlength="2000">
+  <div class="row end"><button class="btn ghost" value="cancel" type="button" id="exam-cancel">Cancel</button><button class="btn" type="submit">Create</button></div>
+</form></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ base }}/static/js/home.js"></script>{% endblock %}

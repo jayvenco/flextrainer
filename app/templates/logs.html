@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Logs · {{ app_name }}{% endblock %}
+{% block body %}
+<div class="hero row between"><div><h1>Logs</h1><p class="muted">Last {{ lines|length }} lines of <code>/app/data/logs/app.log</code>.</p></div>
+  <div class="row"><a class="btn ghost sm" href="{{ base }}/logs">All</a><a class="btn ghost sm" href="{{ base }}/logs?level=warning">Warnings</a><a class="btn ghost sm" href="{{ base }}/logs?level=error">Errors</a></div></div>
+<pre class="card logs" tabindex="0">{% for l in lines %}{{ l }}
+{% else %}No log lines yet.{% endfor %}</pre>
+{% endblock %}

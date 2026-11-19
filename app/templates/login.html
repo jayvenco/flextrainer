@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Sign in · {{ app_name }}{% endblock %}
+{% block body %}
+<div class="login card">
+  <h1>Sign in</h1>
+  <p class="muted">First start? Use <code>admin</code> / <code>admin</code>. You will be asked to change it.</p>
+  {% if error %}<div class="alert bad" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ base }}/login">
+    <label class="f" for="u">Username</label><input id="u" name="username" type="text" autocomplete="username" required autofocus>
+    <label class="f" for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password" required>
+    <p><button class="btn" type="submit">Sign in</button></p>
+  </form>
+</div>
+{% endblock %}

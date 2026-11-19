@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ exam.title }} · {{ app_name }}{% endblock %}
+{% block body %}
+<p class="small"><a href="{{ base }}/">&larr; All exams</a></p>
+<div class="hero row between">
+  <div><h1>{{ exam.title }}</h1>{% if exam.description %}<p class="muted">{{ exam.description }}</p>{% endif %}</div>
+  <div class="row"><button class="btn ghost sm" id="rename-exam" type="button">Rename</button><button class="btn ghost sm" id="reset-exam" type="button">Reset progress</button><button class="btn danger sm" id="delete-exam" type="button">Delete</button></div>
+</div>
+<div id="exam-root" data-exam="{{ exam.id }}" data-gpt="{{ 1 if gpt else 0 }}" data-title="{{ exam.title }}" data-desc="{{ exam.description }}" data-running="{{ 1 if job.running else 0 }}"></div>
+
+<section class="grid stats">
+  <div class="card stat"><b>{{ stats.total }}</b><span>questions</span></div>
+  <div class="card stat"><b>{{ stats.mastered }}</b><span>mastered</span></div>
+  <div class="card stat"><b>{{ stats.wrong }}</b><span>to review</span></div>
+  <div class="card stat"><b>{{ stats.accuracy if stats.accuracy is not none else '–' }}{% if stats.accuracy is not none %}%{% endif %}</b><span>accuracy</span></div>
+</section>
+
+<section class="card">
+  <h2>Practice</h2>
+  {% if stats.total %}
+  {% if stats.session %}<div class="alert ok row between"><span>You have an unfinished session: {{ stats.session.answered }} of {{ stats.session.total }} answered.</span>
+    <a class="btn sm" href="{{ base }}/practice/{{ stats.session.id }}">Resume</a></div>{% endif %}
+  <form id="start-form" class="row">
+    <label class="sr" for="mode">Mode</label>
+    <select id="mode"><option value="smart">Smart mix (new, then wrong)</option><option value="unseen">Unseen only</option><option value="wrong">Wrong answers only</option><option value="all">All questions</option></select>
+    <label class="sr" for="count">Number of questions</label>
+    <select id="count"><option value="10">10 questions</option><option value="20" selected>20 questions</option><option value="50">50 questions</option><option value="">All</option></select>
+    <button class="btn" type="submit">Start new session</button>
+  </form>
+  {% else %}<p class="muted">Add questions below to start practising.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Add questions</h2>
+  <div class="grid two">
+    <form id="upload-form">
+      <h3>Upload files</h3>
+      <p class="muted small">PDF, Word (.docx), Markdown or text. Multiple choice with lettered options and an answer line or key works best.</p>
+      <input id="files" type="file" multiple accept=".pdf,.docx,.md,.markdown,.txt" aria-label="Files to upload">
+      <label class="check"><input type="checkbox" id="ai-upload" {{ '' if gpt else 'disabled' }}> AI-assisted import (ChatGPT){% if not gpt %} <span class="muted small">(needs API key)</span>{% endif %}</label>
+      <p><button class="btn" type="submit">Import</button></p>
+    </form>
+    <form id="scrape-form">
+      <h3>Scrape web pages</h3>
+      <p class="muted small">One URL per line. Pages are fetched by the server; only public sites are allowed.</p>
+      <textarea id="urls" rows="3" placeholder="https://example.com/practice-exam" aria-label="URLs to scrape"></textarea>
+      <label class="check"><input type="checkbox" id="ai-scrape" {{ '' if gpt else 'disabled' }}> AI-assisted import (ChatGPT)</label>
+      <p><button class="btn" type="submit">Scrape</button></p>
+    </form>
+  </div>
+  <div id="import-result" aria-live="polite"></div>
+  {% if sources %}<h3>Sources</h3><ul class="plain">
+    {% for s in sources %}<li class="row between"><span>{{ '🔗' if s.kind == 'url' else '📄' }} {{ s.name }} <span class="muted small">{{ s.added_at.strftime('%Y-%m-%d') }}</span></span>
+      <button class="btn ghost sm" data-del-source="{{ s.id }}" type="button">Remove with its questions</button></li>{% endfor %}</ul>{% endif %}
+</section>
+
+<section class="card">
+  <div class="row between"><h2>ChatGPT check</h2>
+    <div class="row"><button class="btn" id="verify-all" type="button" {{ '' if gpt else 'disabled' }}>Check unchecked questions</button>
+    <button class="btn ghost" id="verify-redo" type="button" {{ '' if gpt else 'disabled' }}>Re-check all</button></div></div>
+  <p class="muted small">ChatGPT answers each question, compares it with your answer key and adds a short explanation and a suggested reference link. Links are suggestions from the model: verify before relying on them.
+    {% if not gpt %}<a href="{{ base }}/settings">Add your API key in Settings.</a>{% endif %}</p>
+  <div id="verify-progress" class="hidden"><div class="bar"><i id="verify-bar" style="width:0%"></i></div><p class="small muted" id="verify-text" aria-live="polite"></p></div>
+</section>
+
+<section class="card">
+  <div class="row between"><h2>Questions ({{ questions|length }})</h2>
+    <label class="sr" for="qfilter">Filter</label>
+    <select id="qfilter"><option value="">All</option><option value="unchecked">Unchecked</option><option value="confirmed">Confirmed by ChatGPT</option><option value="disputed">Disputed</option><option value="answered">Answered by ChatGPT</option><option value="error">Check failed</option><option value="nokey">No answer key</option></select></div>
+  <div id="qlist">
+  {% for q in questions %}
+  <details class="q" data-status="{{ q.verify_status }}" data-nokey="{{ 1 if not q.correct and not q.ai_correct and q.qtype == 'mc' else 0 }}" data-id="{{ q.id }}">
+    <summary><span class="qn">{{ loop.index }}.</span> {{ q.text }}
+      <span class="pill st-{{ q.verify_status }}">{{ {'unchecked':'unchecked','confirmed':'confirmed','disputed':'disputed','answered':'ChatGPT answer','error':'check failed'}[q.verify_status] }}</span></summary>
+    <div class="qbody">
+      {% if q.qtype == 'mc' %}<ol class="opts" type="A">{% for o in q.options %}<li class="{{ 'right' if loop.index0 in q.correct }}{{ ' airight' if loop.index0 in q.ai_correct and loop.index0 not in q.correct }}">{{ o }}</li>{% endfor %}</ol>
+      {% if not q.correct %}<p class="small muted">No answer key in the source{% if q.ai_correct %}; showing ChatGPT's answer{% endif %}.</p>{% endif %}
+      {% else %}<p class="small"><b>Reference answer:</b> {{ q.answer_text or q.ai_answer or 'none yet' }}</p>{% endif %}
+      {% if q.explanation %}<p class="small"><b>Explanation:</b> {{ q.explanation }}</p>{% endif %}
+      {% if q.verify_note %}<p class="small"><b>ChatGPT:</b> {{ q.verify_note }}
+        {% if q.verify_link %}<a href="{{ q.verify_link }}" target="_blank" rel="noopener noreferrer nofollow">Suggested reference</a>{% endif %}</p>{% endif %}
+      <div class="row">
+        <button class="btn ghost sm" data-edit="{{ q.id }}" type="button">Edit</button>
+        {% if gpt %}<button class="btn ghost sm" data-verify="{{ q.id }}" type="button">Check with ChatGPT</button>{% endif %}
+        {% if q.verify_status == 'disputed' %}<button class="btn sm" data-accept="{{ q.id }}" type="button">Use ChatGPT's answer</button>{% endif %}
+        <button class="btn danger sm" data-del-q="{{ q.id }}" type="button">Delete</button>
+      </div>
+    </div>
+  </details>
+  {% else %}<p class="muted">No questions yet.</p>{% endfor %}
+  </div>
+</section>
+
+<dialog id="q-dialog"><form method="dialog" id="q-form" class="dlg">
+  <h2>Edit question</h2>
+  <label class="f" for="q-text">Question</label><textarea id="q-text" rows="3" required maxlength="5000"></textarea>
+  <label class="f" for="q-options">Options (one per line; leave empty for an open question)</label><textarea id="q-options" rows="5"></textarea>
+  <label class="f" for="q-correct">Correct option letters (e.g. B or A,C)</label><input id="q-correct" type="text" maxlength="30">
+  <label class="f" for="q-answer">Reference answer (open questions)</label><textarea id="q-answer" rows="2"></textarea>
+  <label class="f" for="q-expl">Explanation</label><textarea id="q-expl" rows="2"></textarea>
+  <div class="row end"><button class="btn ghost" type="button" id="q-cancel">Cancel</button><button class="btn" type="submit">Save</button></div>
+</form></dialog>
+<dialog id="exam-dialog"><form method="dialog" id="exam-form" class="dlg">
+  <h2>Rename exam</h2>
+  <label class="f" for="exam-title">Title</label><input id="exam-title" type="text" maxlength="200" required>
+  <label class="f" for="exam-desc">Description</label><input id="exam-desc" type="text" maxlength="2000">
+  <div class="row end"><button class="btn ghost" type="button" id="exam-cancel">Cancel</button><button class="btn" type="submit">Save</button></div>
+</form></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ base }}/static/js/exam.js"></script>{% endblock %}

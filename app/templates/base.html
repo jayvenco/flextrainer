@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="{{ theme }}" data-font="{{ font }}" data-base="{{ base }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="icon" href="{{ base }}/static/images/icon.png">
+<link rel="apple-touch-icon" href="{{ base }}/static/images/icon-192.png">
+<link rel="manifest" href="{{ base }}/manifest.webmanifest">
+<link rel="stylesheet" href="{{ base }}/static/css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="{{ base }}/"><img src="{{ base }}/static/images/icon.png" width="28" height="28" alt=""><span>{{ app_name }}</span></a>
+  {% if user %}
+  <nav class="nav" aria-label="Main">
+    <a href="{{ base }}/" class="{{ 'on' if active == 'home' }}">Exams</a>
+    <a href="{{ base }}/settings" class="{{ 'on' if active == 'settings' }}">Settings</a>
+    <a href="{{ base }}/logs" class="{{ 'on' if active == 'logs' }}">Logs</a>
+    <a href="{{ base }}/about" class="{{ 'on' if active == 'about' }}">About</a>
+  </nav>
+  {% else %}<div class="nav"></div>{% endif %}
+  <div class="tools">
+    <select id="theme-sel" aria-label="Theme" data-appearance="theme">
+      {% for k, v in THEMES.items() %}<option value="{{ k }}" {{ 'selected' if k == theme }}>{{ v }}</option>{% endfor %}
+    </select>
+    <select id="font-sel" aria-label="Font" data-appearance="font">
+      {% for k, v in FONTS.items() %}<option value="{{ k }}" {{ 'selected' if k == font }}>{{ v[0] }}</option>{% endfor %}
+    </select>
+    {% if user %}<form method="post" action="{{ base }}/logout"><button class="btn ghost sm" type="submit">Sign out</button></form>{% endif %}
+  </div>
+</div></header>
+<main id="main" class="wrap">{% block body %}{% endblock %}</main>
+<div class="wrap footer">{{ app_name }} v{{ app_version }}{% if user %} · <a href="{{ base }}/about">About</a>{% endif %}</div>
+<script src="{{ base }}/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

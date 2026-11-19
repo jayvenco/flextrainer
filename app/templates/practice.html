@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Practice · {{ exam.title }} · {{ app_name }}{% endblock %}
+{% block body %}
+<div id="practice" data-session="{{ session.id }}" data-exam="{{ exam.id }}">
+  <p class="small"><a href="{{ base }}/exams/{{ exam.id }}">&larr; {{ exam.title }}</a> · <button class="linklike" id="show-keys" type="button">Keyboard shortcuts</button></p>
+  <div class="row between"><div class="bar grow" role="progressbar" aria-label="Session progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="pbar"><i style="width:0%"></i></div><span class="small muted" id="pcount"></span></div>
+  <div id="stage" class="card quiz" aria-live="polite"><p class="muted">Loading…</p></div>
+  <div id="summary" class="card hidden"></div>
+</div>
+<dialog id="keys-dialog"><div class="dlg"><h2>Keyboard shortcuts</h2>
+  <ul class="plain"><li><kbd>1</kbd>–<kbd>8</kbd> or <kbd>A</kbd>–<kbd>H</kbd> select an option</li><li><kbd>Enter</kbd> submit / next question</li><li><kbd>S</kbd> skip the question</li><li><kbd>Y</kbd> / <kbd>N</kbd> open questions: I was right / wrong</li><li><kbd>R</kbd> reveal the answer (open questions)</li><li><kbd>?</kbd> show this help</li></ul>
+  <div class="row end"><button class="btn" id="keys-close" type="button">Close</button></div></div></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ base }}/static/js/practice.js"></script>{% endblock %}

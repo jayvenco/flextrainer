@@ -1,0 +1,17 @@
+services:
+  flextrainer:
+    build: .
+    image: ghcr.io/jayvenco/flextrainer:latest
+    container_name: flextrainer
+    ports:
+      - "8888:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TZ:-UTC}
+      PUID: ${PUID:-99}
+      PGID: ${PGID:-100}
+    restart: unless-stopped

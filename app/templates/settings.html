@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_name }}{% endblock %}
+{% block body %}
+<div class="hero"><h1>Settings</h1></div>
+<section class="card"><h2>Appearance</h2>
+  <p class="muted small">Use the theme and font menus in the top bar; your choice is saved to your account.</p>
+  <p><a class="btn ghost" href="{{ base }}/account/password">Change password</a></p></section>
+
+<section class="card"><h2>ChatGPT</h2>
+  <p class="muted small">Used to check every question, explain answers, suggest reference links, fill in missing answer keys and (optionally) read hard-to-parse material. Question text is sent to the API provider. Leave the key empty to keep the current one.</p>
+  <p>Status: {% if gpt.configured %}<span class="pill ok">key configured{{ ' (from environment)' if gpt.from_env }}</span>{% else %}<span class="pill">not configured</span>{% endif %}</p>
+  <form id="gpt-form">
+    <label class="f" for="gpt-key">API key</label><input id="gpt-key" type="password" autocomplete="off" placeholder="sk-…" maxlength="300">
+    <label class="f" for="gpt-model">Model</label><input id="gpt-model" type="text" value="{{ gpt.model }}" maxlength="80">
+    <p class="small muted">API base URL: <code>{{ gpt.base_url }}</code> (set <code>OPENAI_BASE_URL</code> to change).</p>
+    <div class="row"><button class="btn" type="submit">Save</button><button class="btn ghost" id="gpt-test" type="button">Test connection</button><button class="btn ghost" id="gpt-clear" type="button">Remove key</button></div>
+  </form></section>
+
+<section class="card"><h2>Backups</h2>
+  <form id="backup-cfg" class="row">
+    <label class="check"><input type="checkbox" id="b-enabled" {{ 'checked' if bcfg.enabled }}> Automatic weekly backup</label>
+    <label for="b-keep">Keep last</label><input id="b-keep" type="number" min="1" max="60" value="{{ bcfg.keep }}" class="narrow">
+    <button class="btn sm" type="submit">Save</button></form>
+  <div class="row" style="margin-top:12px"><button class="btn" id="b-now" type="button">Create backup now</button>
+    <a class="btn ghost" id="b-export" href="{{ base }}/ui/backups/export">Export (download new backup)</a>
+    <label class="btn ghost" for="b-import">Import / restore…</label><input type="file" id="b-import" accept=".zip" class="sr"></div>
+  <p class="muted small">Restoring replaces all data; a safety copy (<code>before-restore-…</code>) is made first. Backups use SQLite's online backup, so they are consistent while the app runs.</p>
+  <table><thead><tr><th>Backup</th><th>Created</th><th>Size</th><th></th></tr></thead><tbody id="b-list">
+  {% for b in backups %}<tr><td><code>{{ b.name }}</code></td><td>{{ b.created }}</td><td>{{ (b.size / 1024)|round|int }} KB</td>
+    <td class="end"><a class="btn ghost sm" href="{{ base }}/ui/backups/{{ b.name }}">Download</a> <button class="btn ghost sm" data-del-backup="{{ b.name }}" type="button">Delete</button></td></tr>
+  {% else %}<tr><td colspan="4" class="muted">No backups yet.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}
+{% block scripts %}<script src="{{ base }}/static/js/settings.js"></script>{% endblock %}
