@@ -214,3 +214,37 @@ def test_backup_roundtrip(auth):
 def test_pages_render(auth):
     for path in ("/settings", "/logs", "/about", "/manifest.webmanifest", "/sw.js", "/static/css/app.css"):
         assert auth.get(path).status_code == 200, path
+
+
+def test_generate_multiple_choice_from_open_examples(auth, monkeypatch):
+    c = auth
+    fake = {
+        "questions": [
+            {
+                "text": "What is the capital of France?",
+                "options": ["A. Paris", "Lyon", "Nice", "Lille"],
+                "correct": ["A"],
+                "explanation": "Paris is the capital.",
+            },
+            {"text": "No options here", "options": [], "correct": []},
+        ]
+    }
+    monkeypatch.setattr(gpt, "_chat", lambda *a, **k: fake)
+    from app.database import SessionLocal
+    from app.services import store
+
+    with SessionLocal() as db:
+        store.set_openai_key(db, "sk-test")
+    try:
+        exam = c.post("/ui/exams", json={"title": "Gen"}).json()["id"]
+        # open question without options: parser finds no MC, so ChatGPT generates it automatically
+        r = c.post(
+            f"/ui/exams/{exam}/upload",
+            files={"files": ("o.md", io.BytesIO(b"1. What is the capital of France?\nAnswer: Paris\n"), "text/markdown")},
+        ).json()["results"][0]
+        assert r["added"] == 1 and not r["error"].startswith("AI-assisted import failed")
+        page = c.get(f"/exams/{exam}")
+        assert "Paris" in page.text and "Lyon" in page.text and "A. Paris" not in page.text
+    finally:
+        with SessionLocal() as db:
+            store.set_openai_key(db, "")

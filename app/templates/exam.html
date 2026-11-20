@@ -38,6 +38,7 @@
       <p class="muted small">PDF, Word (.docx), Markdown or text. Multiple choice with lettered options and an answer line or key works best.</p>
       <input id="files" type="file" multiple accept=".pdf,.docx,.md,.markdown,.txt" aria-label="Files to upload">
       <label class="check"><input type="checkbox" id="ai-upload" {{ '' if gpt else 'disabled' }}> AI-assisted import (ChatGPT){% if not gpt %} <span class="muted small">(needs API key)</span>{% endif %}</label>
+      <label class="check"><input type="checkbox" id="gen-upload" {{ '' if gpt else 'disabled' }}> Generate multiple choice from examples (ChatGPT)</label>
       <p><button class="btn" type="submit">Import</button></p>
     </form>
     <form id="scrape-form">
@@ -45,6 +46,7 @@
       <p class="muted small">One URL per line. Pages are fetched by the server; only public sites are allowed.</p>
       <textarea id="urls" rows="3" placeholder="https://example.com/practice-exam" aria-label="URLs to scrape"></textarea>
       <label class="check"><input type="checkbox" id="ai-scrape" {{ '' if gpt else 'disabled' }}> AI-assisted import (ChatGPT)</label>
+      <label class="check"><input type="checkbox" id="gen-scrape" {{ '' if gpt else 'disabled' }}> Generate multiple choice from examples (ChatGPT)</label>
       <p><button class="btn" type="submit">Scrape</button></p>
     </form>
   </div>

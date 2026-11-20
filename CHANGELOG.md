@@ -3,6 +3,9 @@
 All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachangelog.com), versions follow SemVer.
 
 ## [Unreleased]
+### Added
+- Generate multiple choice from example questions or study material with ChatGPT (checkbox on upload and scrape; automatic when no multiple choice is found).
+
 ### Changed
 - Default host port is now 8822 (Unraid template, install script, compose file).
 

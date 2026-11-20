@@ -17,6 +17,9 @@ One container, one SQLite file, no external services required.
 - **Import**: PDF, Word (`.docx`, including auto-numbered A/B/C lists), Markdown and text. Recognises numbered questions,
   lettered options, `Answer:`/`Antwoord:` lines, explanations, markdown checkboxes and a trailing answer key.
   Duplicates are skipped. Optional **AI-assisted import** for material the parser cannot read.
+  With a ChatGPT key, **multiple choice is generated from your examples** (open or numbered questions, study text);
+  questions already written as multiple choice are kept as they are. If the parser finds no multiple choice at all,
+  generation runs automatically.
 - **Scraper**: paste URLs, the server fetches and converts the page (HTML, PDF or text) into questions. Public addresses
   only (SSRF protection).
 - **Practice**: smart mix (new first, then wrong), unseen only, wrong only or all. The result (✔/✘) is shown the moment

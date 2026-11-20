@@ -109,18 +109,29 @@ def reset_progress(exam_id: int, user: User = Depends(ui_user), db: Session = De
 # ---------- import ----------
 
 
-def _ingest(db: Session, exam: Exam, text: str, name: str, kind: str, url: str, use_ai: bool) -> dict:
+def _ingest(
+    db: Session, exam: Exam, text: str, name: str, kind: str, url: str, use_ai: bool, generate: bool = False
+) -> dict:
     parsed = parser.parse_questions(text)
     note = ""
     cfg = store.openai_config(db)
-    if cfg["configured"] and (use_ai or not parsed):
+    has_mc = any(p["qtype"] == "mc" and len(p["options"]) >= 2 for p in parsed)
+    if cfg["configured"] and (generate or use_ai or not has_mc):
         try:
-            ai = gpt.extract_questions(cfg, text)
+            if generate or not has_mc:
+                # Build multiple choice from examples/material; keep questions the parser already read as MC.
+                ai = gpt.generate_questions(cfg, text)
+                if ai:
+                    parsed = [p for p in parsed if p["qtype"] == "mc" and len(p["options"]) >= 2]
+                    if not generate and not has_mc:
+                        note = "No multiple choice found; ChatGPT generated it from the examples."
+            else:
+                ai = gpt.extract_questions(cfg, text)
             seen = {parser.fingerprint(p["text"], p["options"]) for p in parsed}
             parsed += [a for a in ai if parser.fingerprint(a["text"], a["options"]) not in seen]
         except gpt.GptError as exc:
             note = f"AI-assisted import failed: {exc}"
-    elif not parsed:
+    elif not has_mc and not parsed:
         note = "No questions recognised. Add a ChatGPT key in Settings to enable AI-assisted import."
     if not parsed:
         return {"name": name, "found": 0, "added": 0, "duplicates": 0, "error": note or "No questions found."}
@@ -140,6 +151,7 @@ def upload(
     exam_id: int,
     files: Annotated[list[UploadFile], File()],
     ai: Annotated[bool, Form()] = False,
+    generate: Annotated[bool, Form()] = False,
     user: User = Depends(throttled),
     db: Session = Depends(get_db),
 ):
@@ -152,7 +164,7 @@ def upload(
         try:
             data = f.file.read(extract.MAX_BYTES + 1)
             text = extract.extract_text(name, data)
-            results.append(_ingest(db, e, text, name, "file", "", ai))
+            results.append(_ingest(db, e, text, name, "file", "", ai, generate))
         except extract.ExtractError as exc:
             results.append({"name": name, "found": 0, "added": 0, "duplicates": 0, "error": str(exc)})
     return {"results": results}
@@ -161,6 +173,7 @@ def upload(
 class ScrapeIn(BaseModel):
     urls: list[str] = Field(min_length=1, max_length=10)
     ai: bool = False
+    generate: bool = False
 
 
 @router.post("/exams/{exam_id}/scrape")
@@ -173,7 +186,7 @@ def scrape(exam_id: int, body: ScrapeIn, user: User = Depends(throttled), db: Se
             continue
         try:
             text, title = scraper.fetch(url)
-            results.append(_ingest(db, e, text, title or url, "url", url, body.ai))
+            results.append(_ingest(db, e, text, title or url, "url", url, body.ai, body.generate))
         except scraper.ScrapeError as exc:
             results.append({"name": url, "found": 0, "added": 0, "duplicates": 0, "error": str(exc)})
     return {"results": results}

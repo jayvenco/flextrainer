@@ -47,6 +47,7 @@
     const files = $('#files').files; if (!files.length) return toast('Choose at least one file.', true);
     const fd = new FormData(); for (const f of files) fd.append('files', f);
     fd.append('ai', $('#ai-upload').checked ? 'true' : 'false');
+    fd.append('generate', $('#gen-upload').checked ? 'true' : 'false');
     const btn = e.submitter; btn.disabled = true; btn.textContent = 'Importing…';
     try { showResults((await api('POST', `/ui/exams/${id}/upload`, fd)).results); }
     catch (err) { toast(err.message, true); } finally { btn.disabled = false; btn.textContent = 'Import'; }
@@ -56,7 +57,7 @@
     const urls = $('#urls').value.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!urls.length) return toast('Enter at least one URL.', true);
     const btn = e.submitter; btn.disabled = true; btn.textContent = 'Scraping…';
-    try { showResults((await api('POST', `/ui/exams/${id}/scrape`, { urls, ai: $('#ai-scrape').checked })).results); }
+    try { showResults((await api('POST', `/ui/exams/${id}/scrape`, { urls, ai: $('#ai-scrape').checked, generate: $('#gen-scrape').checked })).results); }
     catch (err) { toast(err.message, true); } finally { btn.disabled = false; btn.textContent = 'Scrape'; }
   });
   document.querySelectorAll('[data-del-source]').forEach((b) => b.addEventListener('click', async () => {

@@ -34,6 +34,17 @@ EXTRACT_SYSTEM = (
     'Use option letters in "correct" only when the text states the answer; otherwise use an empty array.'
 )
 
+GENERATE_SYSTEM = (
+    "You turn exam material into multiple choice questions. The text may contain example questions (open, "
+    "short-answer, numbered, tables, or already multiple choice) or plain study material. Reply ONLY with JSON: "
+    '{"questions":[{"text":"...","options":["...","...","...","..."],"correct":["B"],"explanation":"..."}]}. '
+    "Rules: keep questions that are already multiple choice exactly as written (same wording and options). "
+    "Turn every other example question into a multiple choice question with 4 plausible options (A-D) and mark "
+    "the correct letter(s) in the same language as the text. If the text has no questions, write questions that "
+    "test its key facts. Distractors must be plausible but clearly wrong. Never include trivia that is not in the "
+    "text or common knowledge for the topic. Do not invent more than 40 questions per request."
+)
+
 
 class GptError(Exception):
     pass
@@ -130,51 +141,70 @@ def verify_question(cfg: dict, q: dict) -> dict:
     return {"status": status, "note": explanation, "link": link, "ai_correct": ai_idx, "ai_answer": answer}
 
 
-def extract_questions(cfg: dict, text: str, max_chunks: int = 8) -> list[dict]:
-    """AI-assisted extraction for material the heuristic parser cannot read."""
+def _chunks(text: str, size: int = 9000) -> list[str]:
     chunks, buf = [], ""
     for para in text.split("\n"):
-        if len(buf) + len(para) > 9000:
+        if len(buf) + len(para) > size:
             chunks.append(buf)
             buf = ""
         buf += para + "\n"
     if buf.strip():
         chunks.append(buf)
+    return chunks
+
+
+def _normalise(data: dict, force_mc: bool = False) -> list[dict]:
     out: list[dict] = []
-    for chunk in chunks[:max_chunks]:
-        data = _chat(cfg, EXTRACT_SYSTEM, chunk, timeout=120)
-        for item in data.get("questions") or []:
-            try:
-                qtext = re.sub(r"\s+", " ", str(item.get("text", ""))).strip()
-                options = [re.sub(r"\s+", " ", str(o)).strip() for o in (item.get("options") or []) if str(o).strip()]
-                if len(qtext) < 3:
-                    continue
-                if len(options) >= 2:
-                    correct = letters_to_idx(" ".join(str(c) for c in (item.get("correct") or [])), len(options))
-                    out.append(
-                        {
-                            "text": qtext,
-                            "options": options,
-                            "correct": correct,
-                            "qtype": "mc",
-                            "explanation": str(item.get("explanation") or "").strip(),
-                            "answer_text": "",
-                        }
-                    )
-                else:
-                    out.append(
-                        {
-                            "text": qtext,
-                            "options": [],
-                            "correct": [],
-                            "qtype": "open",
-                            "explanation": str(item.get("explanation") or "").strip(),
-                            "answer_text": str(item.get("answer") or "").strip(),
-                        }
-                    )
-            except (AttributeError, TypeError):
+    for item in data.get("questions") or []:
+        try:
+            qtext = re.sub(r"\s+", " ", str(item.get("text", ""))).strip()
+            options = [re.sub(r"\s+", " ", str(o)).strip() for o in (item.get("options") or []) if str(o).strip()]
+            # drop leading "A. " style labels the model may have added
+            options = [re.sub(r"^\(?[A-Ha-h][\).:]\s+", "", o) for o in options]
+            if len(qtext) < 3:
                 continue
+            if len(options) >= 2:
+                correct = letters_to_idx(" ".join(str(c) for c in (item.get("correct") or [])), len(options))
+                out.append(
+                    {
+                        "text": qtext,
+                        "options": options,
+                        "correct": correct,
+                        "qtype": "mc",
+                        "explanation": str(item.get("explanation") or "").strip(),
+                        "answer_text": "",
+                    }
+                )
+            elif not force_mc:
+                out.append(
+                    {
+                        "text": qtext,
+                        "options": [],
+                        "correct": [],
+                        "qtype": "open",
+                        "explanation": str(item.get("explanation") or "").strip(),
+                        "answer_text": str(item.get("answer") or "").strip(),
+                    }
+                )
+        except (AttributeError, TypeError):
+            continue
     return out
 
 
-__all__ = ["GptError", "verify_question", "extract_questions", "test_connection", "fingerprint"]
+def extract_questions(cfg: dict, text: str, max_chunks: int = 8) -> list[dict]:
+    """AI-assisted extraction for material the heuristic parser cannot read."""
+    out: list[dict] = []
+    for chunk in _chunks(text)[:max_chunks]:
+        out += _normalise(_chat(cfg, EXTRACT_SYSTEM, chunk, timeout=120))
+    return out
+
+
+def generate_questions(cfg: dict, text: str, max_chunks: int = 8) -> list[dict]:
+    """Create multiple choice questions from example questions or study material."""
+    out: list[dict] = []
+    for chunk in _chunks(text)[:max_chunks]:
+        out += _normalise(_chat(cfg, GENERATE_SYSTEM, chunk, timeout=150), force_mc=True)
+    return out
+
+
+__all__ = ["GptError", "verify_question", "extract_questions", "generate_questions", "test_connection", "fingerprint"]
