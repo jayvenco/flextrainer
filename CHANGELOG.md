@@ -2,6 +2,10 @@
 
 All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachangelog.com), versions follow SemVer.
 
+## [Unreleased]
+### Changed
+- Default host port is now 8822 (Unraid template, install script, compose file).
+
 ## [0.1.0] - 2026-11-19
 ### Added
 - Exams overview as the main menu, with progress, accuracy, review and "resume" per exam.

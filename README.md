@@ -39,13 +39,13 @@ Run on the Unraid terminal:
 curl -fsSL https://raw.githubusercontent.com/jayvenco/flextrainer/main/scripts/install-unraid.sh | bash
 ```
 It pulls `ghcr.io/jayvenco/flextrainer:latest`, creates the container with Unraid labels (icon, WebUI button), maps
-`/mnt/user/appdata/flextrainer/data` to `/app/data` and uses host port **8888**. Override with e.g.
+`/mnt/user/appdata/flextrainer/data` to `/app/data` and uses host port **8822**. Override with e.g.
 `HOST_PORT=9000 bash install-unraid.sh`. Alternatively add `unraid/flextrainer.xml` as a Community Applications /
 user template. If the GHCR package is private, set `GHCR_USER` and `GHCR_TOKEN` for the script.
 
 ### Docker run
 ```bash
-docker run -d --name flextrainer --restart unless-stopped -p 8888:8000 \
+docker run -d --name flextrainer --restart unless-stopped -p 8822:8000 \
   -v /mnt/user/appdata/flextrainer/data:/app/data -e TZ=Europe/Amsterdam \
   ghcr.io/jayvenco/flextrainer:latest
 ```
@@ -55,7 +55,7 @@ docker run -d --name flextrainer --restart unless-stopped -p 8888:8000 \
 cp .env.example .env   # optional
 docker compose up --build
 ```
-Open <http://localhost:8888>.
+Open <http://localhost:8822>.
 
 ## Update
 Pull the new image: on Unraid use **Docker tab → force update** (or re-run the install script). Everything lives in the
@@ -80,7 +80,7 @@ All variables are optional; invalid values stop the container with a clear error
 Without a key nothing leaves your server, apart from scraping the URLs you enter.
 
 ## Reverse proxy and HTTPS
-The app honours `X-Forwarded-*` headers. Terminate TLS in your proxy and forward to port 8888 (or 8000 in-network).
+The app honours `X-Forwarded-*` headers. Terminate TLS in your proxy and forward to port 8822 (or 8000 in-network).
 
 **Nginx Proxy Manager:** add a Proxy Host → scheme `http`, forward host/port of the container, enable *Websockets
 support* off (not needed), request an SSL certificate and tick *Force SSL*. Under *Advanced* add

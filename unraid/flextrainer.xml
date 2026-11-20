@@ -18,7 +18,7 @@
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
-  <Config Name="WebUI port" Target="8000" Default="8888" Mode="tcp" Description="Port of the web interface (always 8000 inside the container)." Type="Port" Display="always" Required="true" Mask="false">8888</Config>
+  <Config Name="WebUI port" Target="8000" Default="8822" Mode="tcp" Description="Port of the web interface (always 8000 inside the container)." Type="Port" Display="always" Required="true" Mask="false">8822</Config>
   <Config Name="Data (database, backups, logs)" Target="/app/data" Default="/mnt/user/appdata/flextrainer/data" Mode="rw" Description="SQLite database, weekly backups, logs and the session secret. Keep this on the array/cache so updates never cost data." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/flextrainer/data</Config>
   <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="Time zone, e.g. Europe/Amsterdam." Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID the app runs as (Unraid default 99 = nobody)." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>

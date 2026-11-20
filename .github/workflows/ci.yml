@@ -29,16 +29,16 @@ jobs:
       - name: Build and start the container
         run: |
           docker build -t flextrainer:ci .
-          docker run -d --name ft -p 8888:8000 flextrainer:ci
+          docker run -d --name ft -p 8822:8000 flextrainer:ci
       - name: Health is green
         run: |
           for i in $(seq 1 30); do
-            curl -fsS http://localhost:8888/health && curl -fsS http://localhost:8888/ready && exit 0
+            curl -fsS http://localhost:8822/health && curl -fsS http://localhost:8822/ready && exit 0
             sleep 2
           done
           docker logs ft; exit 1
       - name: Login works and forces a password change
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -d 'username=admin&password=admin' http://localhost:8888/login)
+          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -d 'username=admin&password=admin' http://localhost:8822/login)
           echo "$code"
           echo "$code" | grep -q '^303 .*/account/password'

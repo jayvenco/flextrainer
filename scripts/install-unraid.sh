@@ -11,7 +11,7 @@ set -euo pipefail
 NAME="${CONTAINER_NAME:-flextrainer}"
 IMAGE="${IMAGE:-ghcr.io/jayvenco/flextrainer}"
 TAG="${IMAGE_TAG:-latest}"
-HOST_PORT="${HOST_PORT:-8888}"
+HOST_PORT="${HOST_PORT:-8822}"
 CONTAINER_PORT=8000
 APPDATA="${APPDATA:-/mnt/user/appdata/${NAME}}"
 RAW="${RAW_URL:-https://raw.githubusercontent.com/jayvenco/flextrainer/main/unraid}"

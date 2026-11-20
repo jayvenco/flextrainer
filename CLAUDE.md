@@ -29,12 +29,12 @@ Python 3.12, FastAPI, SQLAlchemy, Jinja2, vanilla JS, SQLite (WAL) in `/app/data
 - The answer key is never sent to the browser before a question is answered.
 - ChatGPT links are *suggestions*; the UI says so. Never log the API key.
 - 5 themes (2 light, 3 dark), 5 bundled fonts, no external CDNs.
-- Container port 8000, suggested host port 8888, data `/mnt/user/appdata/flextrainer/data`.
+- Container port 8000, suggested host port 8822, data `/mnt/user/appdata/flextrainer/data`.
   Image `ghcr.io/jayvenco/flextrainer`. Single release flow: `main` -> `:latest`.
 - Update README, CHANGELOG, `docs/api.md` and screenshots with every user-visible change. Conventional commits,
   semantic version tags.
 
 ## Commands
-- Run: `docker compose up --build` (http://localhost:8888) or `./.venv/bin/uvicorn app.main:app --reload --port 8000`
+- Run: `docker compose up --build` (http://localhost:8822) or `./.venv/bin/uvicorn app.main:app --reload --port 8000`
 - Tests: `./.venv/bin/python -m pytest -q`; lint: `./.venv/bin/ruff check app tests`
 - Screenshots: `python scripts/screenshots.py` (needs Playwright and a running demo server, see the script header)
