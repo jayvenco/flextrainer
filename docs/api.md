@@ -16,6 +16,7 @@ Internal UI endpoints (prefix `/ui`, cookie session):
 | --- | --- |
 | Appearance | `POST /ui/appearance` |
 | Exams | `POST /ui/exams`, `PATCH|DELETE /ui/exams/{id}`, `POST /ui/exams/{id}/reset` |
+| Manage | `POST /ui/exams/{id}/duplicate`, `POST /ui/exams/{id}/questions` (add), `POST /ui/exams/{id}/questions/delete` (`{ids}`), `POST /ui/questions/{id}/reset`, `PATCH /ui/sources/{id}`, `DELETE /ui/sources/{id}?keep_questions=true`, `POST /ui/exams/{id}/paste` |
 | Import | `POST /ui/exams/{id}/upload`, `POST /ui/exams/{id}/scrape`, `DELETE /ui/sources/{id}` | Optional fields: `ai`, `generate` (ChatGPT generates multiple choice from the material).
 | Questions | `GET|PATCH|DELETE /ui/questions/{id}`, `POST …/verify`, `POST …/accept-ai`, `POST …/reveal` |
 | ChatGPT bulk check | `POST /ui/exams/{id}/verify[?redo=true]`, `GET /ui/exams/{id}/verify/status` |

@@ -18,4 +18,16 @@
       location.href = ft.BASE + '/practice/' + r.id;
     } catch (err) { toast(err.message, true); }
   }));
+  const act = (attr, fn) => document.querySelectorAll(`[${attr}]`).forEach((b) => b.addEventListener('click', async () => {
+    try { await fn(b); } catch (err) { toast(err.message, true); }
+  }));
+  act('data-home-dup', async (b) => { await api('POST', `/ui/exams/${b.dataset.homeDup}/duplicate`); location.reload(); });
+  act('data-home-reset', async (b) => {
+    if (!confirm('Reset all progress for this exam? Questions are kept.')) return;
+    await api('POST', `/ui/exams/${b.dataset.homeReset}/reset`); location.reload();
+  });
+  act('data-home-del', async (b) => {
+    if (!confirm(`Delete "${b.dataset.title}", all its questions and your progress? This cannot be undone.`)) return;
+    await api('DELETE', '/ui/exams/' + b.dataset.homeDel); location.reload();
+  });
 })();

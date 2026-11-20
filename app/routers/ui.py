@@ -106,6 +106,28 @@ def reset_progress(exam_id: int, user: User = Depends(ui_user), db: Session = De
     return {"ok": True}
 
 
+@router.post("/exams/{exam_id}/duplicate")
+def duplicate_exam(exam_id: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    """Copy an exam with its questions (no progress, ChatGPT checks and sources are not copied)."""
+    e = _exam(db, exam_id)
+    copy = Exam(title=f"{e.title} (copy)"[:200], description=e.description)
+    db.add(copy)
+    db.flush()
+    parsed = [
+        {
+            "text": q.text,
+            "options": q.options,
+            "correct": q.correct,
+            "qtype": q.qtype,
+            "explanation": q.explanation,
+            "answer_text": q.answer_text,
+        }
+        for q in sorted(e.questions, key=lambda x: x.position)
+    ]
+    exams.add_questions(db, copy, parsed, None)
+    return {"id": copy.id}
+
+
 # ---------- import ----------
 
 
@@ -192,12 +214,48 @@ def scrape(exam_id: int, body: ScrapeIn, user: User = Depends(throttled), db: Se
     return {"results": results}
 
 
-@router.delete("/sources/{source_id}")
-def delete_source(source_id: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+class PasteIn(BaseModel):
+    name: str = Field(default="Pasted text", max_length=300)
+    text: str = Field(min_length=3, max_length=500_000)
+    ai: bool = False
+    generate: bool = False
+
+
+@router.post("/exams/{exam_id}/paste")
+def paste(exam_id: int, body: PasteIn, user: User = Depends(throttled), db: Session = Depends(get_db)):
+    e = _exam(db, exam_id)
+    name = body.name.strip() or "Pasted text"
+    return {"results": [_ingest(db, e, body.text, name, "file", "", body.ai, body.generate)]}
+
+
+class SourceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=300)
+
+
+def _source(db: Session, source_id: int) -> Source:
     s = db.get(Source, source_id)
     if not s:
         raise HTTPException(404, "Source not found")
-    db.query(Question).filter(Question.source_id == s.id).delete()
+    return s
+
+
+@router.patch("/sources/{source_id}")
+def rename_source(source_id: int, body: SourceIn, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    _source(db, source_id).name = body.name.strip()
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/sources/{source_id}")
+def delete_source(
+    source_id: int, keep_questions: bool = False, user: User = Depends(ui_user), db: Session = Depends(get_db)
+):
+    s = _source(db, source_id)
+    rows = db.query(Question).filter(Question.source_id == s.id)
+    if keep_questions:
+        rows.update({Question.source_id: None})
+    else:
+        rows.delete()
     db.delete(s)
     db.commit()
     return {"ok": True}
@@ -214,6 +272,57 @@ class QuestionIn(BaseModel):
     answer_text: str = Field(default="", max_length=4000)
 
 
+def _validated(body: QuestionIn) -> tuple[list[str], list[int]]:
+    options = [o.strip() for o in body.options if o.strip()]
+    if options and len(options) < 2:
+        raise HTTPException(422, "A multiple-choice question needs at least 2 options.")
+    if any(c < 0 or c >= len(options) for c in body.correct):
+        raise HTTPException(422, "A correct answer points to a missing option.")
+    return options, sorted(set(body.correct))
+
+
+@router.post("/exams/{exam_id}/questions")
+def add_question(exam_id: int, body: QuestionIn, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    e = _exam(db, exam_id)
+    options, correct = _validated(body)
+    item = {
+        "text": body.text.strip(),
+        "options": options,
+        "correct": correct,
+        "qtype": "mc" if options else "open",
+        "explanation": body.explanation.strip(),
+        "answer_text": body.answer_text.strip(),
+    }
+    added, _ = exams.add_questions(db, e, [item], None)
+    if not added:
+        raise HTTPException(409, "An identical question already exists in this exam.")
+    return {"ok": True}
+
+
+class IdsIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/exams/{exam_id}/questions/delete")
+def delete_questions(exam_id: int, body: IdsIn, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    e = _exam(db, exam_id)
+    n = 0
+    for q in db.query(Question).filter(Question.exam_id == e.id, Question.id.in_(body.ids)).all():
+        db.delete(q)
+        n += 1
+    db.commit()
+    return {"deleted": n}
+
+
+@router.post("/questions/{qid}/reset")
+def reset_question(qid: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    """Forget the answers given to one question (it counts as unseen again)."""
+    q = _question(db, qid)
+    db.query(Attempt).filter(Attempt.question_id == q.id).delete()
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/questions/{qid}")
 def get_question(qid: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
     return exams.question_json(_question(db, qid))
@@ -222,11 +331,7 @@ def get_question(qid: int, user: User = Depends(ui_user), db: Session = Depends(
 @router.patch("/questions/{qid}")
 def edit_question(qid: int, body: QuestionIn, user: User = Depends(ui_user), db: Session = Depends(get_db)):
     q = _question(db, qid)
-    options = [o.strip() for o in body.options if o.strip()]
-    if options and len(options) < 2:
-        raise HTTPException(422, "A multiple-choice question needs at least 2 options.")
-    if any(c < 0 or c >= len(options) for c in body.correct):
-        raise HTTPException(422, "A correct answer points to a missing option.")
+    options, _ = _validated(body)
     q.qtype = "mc" if options else "open"
     q.text, q.options_json = body.text.strip(), json.dumps(options)
     q.correct_json, q.explanation = json.dumps(sorted(set(body.correct))), body.explanation.strip()

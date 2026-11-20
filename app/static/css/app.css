@@ -131,3 +131,10 @@ kbd{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding
 .footer{padding:40px 0 30px;color:var(--muted);font-size:.85rem;text-align:center}
 .res{padding:8px 0;border-bottom:1px solid var(--line)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* exam management */
+.qsel { margin-right: .35rem; vertical-align: middle; }
+.bulk { margin: .5rem 0; }
+.card-actions { margin-top: .5rem; flex-wrap: wrap; }
+details.paste { margin: .75rem 0; }
+details.paste > summary { cursor: pointer; font-weight: 600; }

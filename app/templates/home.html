@@ -30,6 +30,11 @@
       {% elif c.total %}<button class="btn" data-quick-start="{{ c.id }}" type="button">Practice</button>{% endif %}
       <a class="btn ghost" href="{{ base }}/exams/{{ c.id }}">Open</a>
     </div>
+    <div class="row card-actions">
+      <button class="btn ghost sm" data-home-dup="{{ c.id }}" type="button">Duplicate</button>
+      <button class="btn ghost sm" data-home-reset="{{ c.id }}" type="button">Reset progress</button>
+      <button class="btn danger sm" data-home-del="{{ c.id }}" data-title="{{ c.title }}" type="button">Delete</button>
+    </div>
   </article>
   {% endfor %}
 </div>

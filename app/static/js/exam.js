@@ -24,6 +24,10 @@
     try { await api('PATCH', '/ui/exams/' + id, { title: $('#exam-title').value, description: $('#exam-desc').value }); reload(); }
     catch (err) { toast(err.message, true); }
   });
+  on('#dup-exam', 'click', async () => {
+    try { const r = await api('POST', `/ui/exams/${id}/duplicate`); location.href = ft.BASE + '/exams/' + r.id; }
+    catch (err) { toast(err.message, true); }
+  });
   on('#reset-exam', 'click', async () => {
     if (!confirm('Reset all progress for this exam? Questions are kept.')) return;
     try { await api('POST', `/ui/exams/${id}/reset`); reload(); } catch (err) { toast(err.message, true); }
@@ -60,10 +64,27 @@
     try { showResults((await api('POST', `/ui/exams/${id}/scrape`, { urls, ai: $('#ai-scrape').checked, generate: $('#gen-scrape').checked })).results); }
     catch (err) { toast(err.message, true); } finally { btn.disabled = false; btn.textContent = 'Scrape'; }
   });
+  on('#paste-form', 'submit', async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true; btn.textContent = 'Importing…';
+    try {
+      showResults((await api('POST', `/ui/exams/${id}/paste`, { name: $('#paste-name').value, text: $('#paste-text').value, ai: $('#ai-paste').checked, generate: $('#gen-paste').checked })).results);
+    } catch (err) { toast(err.message, true); } finally { btn.disabled = false; btn.textContent = 'Import'; }
+  });
   document.querySelectorAll('[data-del-source]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('Remove this source and all questions imported from it?')) return;
-    try { await api('DELETE', '/ui/sources/' + b.dataset.delSource); reload(); } catch (err) { toast(err.message, true); }
+    const keep = b.dataset.keep === '1';
+    if (!confirm(keep ? 'Remove this source from the list? Its questions stay in the exam.' : 'Remove this source and all questions imported from it?')) return;
+    try { await api('DELETE', '/ui/sources/' + b.dataset.delSource + (keep ? '?keep_questions=true' : '')); reload(); } catch (err) { toast(err.message, true); }
   }));
+  const sd = $('#src-dialog'); let renaming = null;
+  on('#src-cancel', 'click', () => sd.close());
+  document.querySelectorAll('[data-ren-source]').forEach((b) => b.addEventListener('click', () => {
+    renaming = b.dataset.renSource; $('#src-name').value = b.dataset.name; sd.showModal();
+  }));
+  on('#src-form', 'submit', async (e) => {
+    e.preventDefault();
+    try { await api('PATCH', '/ui/sources/' + renaming, { name: $('#src-name').value }); reload(); } catch (err) { toast(err.message, true); }
+  });
 
   // question list
   on('#qfilter', 'change', (e) => {
@@ -76,6 +97,21 @@
     if (!confirm('Delete this question?')) return;
     try { await api('DELETE', '/ui/questions/' + b.dataset.delQ); reload(); } catch (err) { toast(err.message, true); }
   }));
+  document.querySelectorAll('[data-reset-q]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Forget your answers to this question?')) return;
+    try { await api('POST', `/ui/questions/${b.dataset.resetQ}/reset`); toast('Progress reset for this question.'); }
+    catch (err) { toast(err.message, true); }
+  }));
+  // bulk selection (checkbox sits inside <summary>: do not toggle the details)
+  const sels = () => Array.from(document.querySelectorAll('.qsel'));
+  const syncSel = () => { const n = sels().filter((c) => c.checked).length; const b = $('#del-selected'); if (b) { b.disabled = !n; b.textContent = n ? `Delete selected (${n})` : 'Delete selected'; } };
+  sels().forEach((c) => { c.addEventListener('click', (e) => e.stopPropagation()); c.addEventListener('change', syncSel); });
+  on('#sel-all', 'change', (e) => { sels().filter((c) => !c.closest('details').hidden).forEach((c) => { c.checked = e.target.checked; }); syncSel(); });
+  on('#del-selected', 'click', async () => {
+    const ids = sels().filter((c) => c.checked).map((c) => Number(c.value));
+    if (!ids.length || !confirm(`Delete ${ids.length} question(s)? This cannot be undone.`)) return;
+    try { await api('POST', `/ui/exams/${id}/questions/delete`, { ids }); reload(); } catch (err) { toast(err.message, true); }
+  });
   document.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', async () => {
     try { await api('POST', `/ui/questions/${b.dataset.accept}/accept-ai`); reload(); } catch (err) { toast(err.message, true); }
   }));
@@ -88,9 +124,14 @@
   // edit dialog
   const qd = $('#q-dialog'); let editing = null;
   on('#q-cancel', 'click', () => qd.close());
+  on('#add-q', 'click', () => {
+    editing = null; $('#q-title').textContent = 'Add question';
+    ['#q-text', '#q-options', '#q-correct', '#q-answer', '#q-expl'].forEach((i) => { $(i).value = ''; });
+    qd.showModal();
+  });
   document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', async () => {
     try {
-      const q = await api('GET', '/ui/questions/' + b.dataset.edit); editing = q.id;
+      const q = await api('GET', '/ui/questions/' + b.dataset.edit); editing = q.id; $('#q-title').textContent = 'Edit question';
       $('#q-text').value = q.text; $('#q-options').value = q.options.join('\n');
       $('#q-correct').value = q.correct.map((i) => 'ABCDEFGH'[i]).join(',');
       $('#q-answer').value = q.answer_text; $('#q-expl').value = q.explanation; qd.showModal();
@@ -101,7 +142,9 @@
     const options = $('#q-options').value.split('\n').map((s) => s.trim()).filter(Boolean);
     const correct = ($('#q-correct').value.toUpperCase().match(/[A-H]/g) || []).map((c) => 'ABCDEFGH'.indexOf(c));
     try {
-      await api('PATCH', '/ui/questions/' + editing, { text: $('#q-text').value, options, correct, answer_text: $('#q-answer').value, explanation: $('#q-expl').value });
+      const body = { text: $('#q-text').value, options, correct, answer_text: $('#q-answer').value, explanation: $('#q-expl').value };
+      if (editing) await api('PATCH', '/ui/questions/' + editing, body);
+      else await api('POST', `/ui/exams/${id}/questions`, body);
       reload();
     } catch (err) { toast(err.message, true); }
   });

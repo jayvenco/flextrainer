@@ -248,3 +248,40 @@ def test_generate_multiple_choice_from_open_examples(auth, monkeypatch):
     finally:
         with SessionLocal() as db:
             store.set_openai_key(db, "")
+
+
+def test_manage_exam_questions_and_sources(auth):
+    c = auth
+    exam = c.post("/ui/exams", json={"title": "Manage"}).json()["id"]
+    # add manually (MC and open), duplicates and bad input are rejected
+    mc = {"text": "Largest planet?", "options": ["Mars", "Jupiter"], "correct": [1]}
+    assert c.post(f"/ui/exams/{exam}/questions", json=mc).status_code == 200
+    assert c.post(f"/ui/exams/{exam}/questions", json=mc).status_code == 409
+    assert c.post(f"/ui/exams/{exam}/questions", json={**mc, "text": "x?", "correct": [5]}).status_code == 422
+    assert c.post(f"/ui/exams/{exam}/questions", json={"text": "Name a prime."}).status_code == 200
+    # paste import creates a source; rename it; remove it but keep the questions
+    r = c.post(f"/ui/exams/{exam}/paste", json={"name": "Notes", "text": EXAM_MD.decode()}).json()["results"][0]
+    assert r["added"] == 3
+    page = c.get(f"/exams/{exam}").text
+    assert "Notes" in page and "Add question" in page
+    from app.database import SessionLocal
+    from app.models import Question, Source
+
+    with SessionLocal() as db:
+        sid = db.query(Source).filter(Source.exam_id == exam).one().id
+    assert c.patch(f"/ui/sources/{sid}", json={"name": "Renamed"}).status_code == 200
+    assert c.delete(f"/ui/sources/{sid}?keep_questions=true").status_code == 200
+    with SessionLocal() as db:
+        assert db.query(Question).filter(Question.exam_id == exam).count() == 5
+    # progress: answer one, reset it, duplicate the exam, bulk delete
+    s = c.post(f"/ui/exams/{exam}/sessions", json={"mode": "all", "count": None}).json()["id"]
+    q = c.get(f"/ui/sessions/{s}/question").json()["question"]
+    c.post(f"/ui/sessions/{s}/answer", json={"question_id": q["id"], "chosen": [0]})
+    assert c.post(f"/ui/questions/{q['id']}/reset").status_code == 200
+    dup = c.post(f"/ui/exams/{exam}/duplicate").json()["id"]
+    with SessionLocal() as db:
+        ids = [x.id for x in db.query(Question).filter(Question.exam_id == dup)]
+    assert len(ids) == 5
+    assert c.post(f"/ui/exams/{dup}/questions/delete", json={"ids": ids[:2]}).json()["deleted"] == 2
+    # ids of another exam are never touched
+    assert c.post(f"/ui/exams/{dup}/questions/delete", json={"ids": [q["id"]]}).json()["deleted"] == 0

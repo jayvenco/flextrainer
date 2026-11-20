@@ -4,7 +4,7 @@
 <p class="small"><a href="{{ base }}/">&larr; All exams</a></p>
 <div class="hero row between">
   <div><h1>{{ exam.title }}</h1>{% if exam.description %}<p class="muted">{{ exam.description }}</p>{% endif %}</div>
-  <div class="row"><button class="btn ghost sm" id="rename-exam" type="button">Rename</button><button class="btn ghost sm" id="reset-exam" type="button">Reset progress</button><button class="btn danger sm" id="delete-exam" type="button">Delete</button></div>
+  <div class="row"><button class="btn ghost sm" id="rename-exam" type="button">Rename</button><button class="btn ghost sm" id="dup-exam" type="button">Duplicate</button><button class="btn ghost sm" id="reset-exam" type="button">Reset progress</button><button class="btn danger sm" id="delete-exam" type="button">Delete</button></div>
 </div>
 <div id="exam-root" data-exam="{{ exam.id }}" data-gpt="{{ 1 if gpt else 0 }}" data-title="{{ exam.title }}" data-desc="{{ exam.description }}" data-running="{{ 1 if job.running else 0 }}"></div>
 
@@ -50,10 +50,21 @@
       <p><button class="btn" type="submit">Scrape</button></p>
     </form>
   </div>
+  <details class="paste"><summary>Paste text instead</summary>
+    <form id="paste-form">
+      <label class="f" for="paste-name">Name (shown under Sources)</label><input id="paste-name" type="text" maxlength="300" placeholder="Pasted text">
+      <label class="f" for="paste-text">Questions or study material</label><textarea id="paste-text" rows="8" maxlength="500000" required></textarea>
+      <label class="check"><input type="checkbox" id="ai-paste" {{ '' if gpt else 'disabled' }}> AI-assisted import (ChatGPT)</label>
+      <label class="check"><input type="checkbox" id="gen-paste" {{ '' if gpt else 'disabled' }}> Generate multiple choice from examples (ChatGPT)</label>
+      <p><button class="btn" type="submit">Import</button></p>
+    </form>
+  </details>
   <div id="import-result" aria-live="polite"></div>
   {% if sources %}<h3>Sources</h3><ul class="plain">
     {% for s in sources %}<li class="row between"><span>{{ '🔗' if s.kind == 'url' else '📄' }} {{ s.name }} <span class="muted small">{{ s.added_at.strftime('%Y-%m-%d') }}</span></span>
-      <button class="btn ghost sm" data-del-source="{{ s.id }}" type="button">Remove with its questions</button></li>{% endfor %}</ul>{% endif %}
+      <span class="row"><button class="btn ghost sm" data-ren-source="{{ s.id }}" data-name="{{ s.name }}" type="button">Rename</button>
+      <button class="btn ghost sm" data-del-source="{{ s.id }}" data-keep="1" type="button">Remove source only</button>
+      <button class="btn ghost sm" data-del-source="{{ s.id }}" type="button">Remove with its questions</button></span></li>{% endfor %}</ul>{% endif %}
 </section>
 
 <section class="card">
@@ -67,12 +78,15 @@
 
 <section class="card">
   <div class="row between"><h2>Questions ({{ questions|length }})</h2>
+    <div class="row"><button class="btn sm" id="add-q" type="button">+ Add question</button>
     <label class="sr" for="qfilter">Filter</label>
-    <select id="qfilter"><option value="">All</option><option value="unchecked">Unchecked</option><option value="confirmed">Confirmed by ChatGPT</option><option value="disputed">Disputed</option><option value="answered">Answered by ChatGPT</option><option value="error">Check failed</option><option value="nokey">No answer key</option></select></div>
+    <select id="qfilter"><option value="">All</option><option value="unchecked">Unchecked</option><option value="confirmed">Confirmed by ChatGPT</option><option value="disputed">Disputed</option><option value="answered">Answered by ChatGPT</option><option value="error">Check failed</option><option value="nokey">No answer key</option></select></div></div>
+  {% if questions %}<div class="row bulk"><label class="check"><input type="checkbox" id="sel-all"> Select all</label>
+    <button class="btn danger sm" id="del-selected" type="button" disabled>Delete selected</button></div>{% endif %}
   <div id="qlist">
   {% for q in questions %}
   <details class="q" data-status="{{ q.verify_status }}" data-nokey="{{ 1 if not q.correct and not q.ai_correct and q.qtype == 'mc' else 0 }}" data-id="{{ q.id }}">
-    <summary><span class="qn">{{ loop.index }}.</span> {{ q.text }}
+    <summary><input type="checkbox" class="qsel" value="{{ q.id }}" aria-label="Select question {{ loop.index }}"> <span class="qn">{{ loop.index }}.</span> {{ q.text }}
       <span class="pill st-{{ q.verify_status }}">{{ {'unchecked':'unchecked','confirmed':'confirmed','disputed':'disputed','answered':'ChatGPT answer','error':'check failed'}[q.verify_status] }}</span></summary>
     <div class="qbody">
       {% if q.qtype == 'mc' %}<ol class="opts" type="A">{% for o in q.options %}<li class="{{ 'right' if loop.index0 in q.correct }}{{ ' airight' if loop.index0 in q.ai_correct and loop.index0 not in q.correct }}">{{ o }}</li>{% endfor %}</ol>
@@ -85,6 +99,7 @@
         <button class="btn ghost sm" data-edit="{{ q.id }}" type="button">Edit</button>
         {% if gpt %}<button class="btn ghost sm" data-verify="{{ q.id }}" type="button">Check with ChatGPT</button>{% endif %}
         {% if q.verify_status == 'disputed' %}<button class="btn sm" data-accept="{{ q.id }}" type="button">Use ChatGPT's answer</button>{% endif %}
+        <button class="btn ghost sm" data-reset-q="{{ q.id }}" type="button">Reset progress</button>
         <button class="btn danger sm" data-del-q="{{ q.id }}" type="button">Delete</button>
       </div>
     </div>
@@ -94,13 +109,18 @@
 </section>
 
 <dialog id="q-dialog"><form method="dialog" id="q-form" class="dlg">
-  <h2>Edit question</h2>
+  <h2 id="q-title">Edit question</h2>
   <label class="f" for="q-text">Question</label><textarea id="q-text" rows="3" required maxlength="5000"></textarea>
   <label class="f" for="q-options">Options (one per line; leave empty for an open question)</label><textarea id="q-options" rows="5"></textarea>
   <label class="f" for="q-correct">Correct option letters (e.g. B or A,C)</label><input id="q-correct" type="text" maxlength="30">
   <label class="f" for="q-answer">Reference answer (open questions)</label><textarea id="q-answer" rows="2"></textarea>
   <label class="f" for="q-expl">Explanation</label><textarea id="q-expl" rows="2"></textarea>
   <div class="row end"><button class="btn ghost" type="button" id="q-cancel">Cancel</button><button class="btn" type="submit">Save</button></div>
+</form></dialog>
+<dialog id="src-dialog"><form method="dialog" id="src-form" class="dlg">
+  <h2>Rename source</h2>
+  <label class="f" for="src-name">Name</label><input id="src-name" type="text" maxlength="300" required>
+  <div class="row end"><button class="btn ghost" type="button" id="src-cancel">Cancel</button><button class="btn" type="submit">Save</button></div>
 </form></dialog>
 <dialog id="exam-dialog"><form method="dialog" id="exam-form" class="dlg">
   <h2>Rename exam</h2>
