@@ -15,7 +15,7 @@ from .config import BASE_DIR, settings, validate_or_exit
 validate_or_exit()
 logging_setup.setup()
 
-from .database import Base, SessionLocal, engine  # noqa: E402
+from .database import Base, SessionLocal, engine, migrate  # noqa: E402
 from .deps import NeedLogin, NeedPasswordChange  # noqa: E402
 from .models import User  # noqa: E402
 from .routers import pages, ui  # noqa: E402
@@ -55,6 +55,7 @@ async def backup_scheduler() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
+    migrate()
     seed_admin()
     log.info("FlexTrainer %s started (base path %r)", settings.version, B or "/")
     task = asyncio.create_task(backup_scheduler())

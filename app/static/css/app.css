@@ -23,6 +23,7 @@
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
+[data-size="85"]{font-size:85%}[data-size="115"]{font-size:115%}[data-size="130"]{font-size:130%}[data-size="150"]{font-size:150%}[data-size="175"]{font-size:175%}
 html,body{overflow-x:hidden}
 body{margin:0;background:radial-gradient(1200px 500px at 10% -10%,color-mix(in srgb,var(--accent) 12%,transparent),transparent),var(--bg);color:var(--text);font-family:var(--font,system-ui);line-height:1.55;min-height:100vh}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
@@ -32,7 +33,7 @@ h1{font-size:1.7rem;margin:.2rem 0 .4rem;letter-spacing:-.02em}h2{font-size:1.2r
 
 /* header */
 .top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.top .wrap{display:flex;align-items:center;gap:18px;height:60px}
+.top .wrap{display:flex;align-items:center;gap:6px 18px;min-height:60px;flex-wrap:wrap;padding-top:6px;padding-bottom:6px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text);letter-spacing:-.01em}
 .brand:hover{text-decoration:none}
 .brand svg{width:28px;height:28px}

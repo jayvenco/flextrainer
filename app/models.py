@@ -21,6 +21,7 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     theme: Mapped[str] = mapped_column(String(32), default="midnight")
     font: Mapped[str] = mapped_column(String(32), default="inter")
+    font_size: Mapped[int] = mapped_column(Integer, default=100, server_default="100")  # percent, see FONT_SIZES
 
 
 class Setting(Base):

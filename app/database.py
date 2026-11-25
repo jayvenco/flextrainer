@@ -24,6 +24,16 @@ class Base(DeclarativeBase):
     pass
 
 
+def migrate() -> None:
+    """Tiny forward-only migrations for columns added after 0.1.0 (create_all never alters tables)."""
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)"))}
+        if cols and "font_size" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN font_size INTEGER NOT NULL DEFAULT 100"))
+
+
 def get_db():
     db = SessionLocal()
     try:

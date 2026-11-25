@@ -33,6 +33,9 @@ FONTS = {
     "system": ("System UI", "system-ui, -apple-system, 'Segoe UI', sans-serif"),
 }
 
+# Text size as a percentage of the browser default (applied to the whole app).
+FONT_SIZES = {85: "Small", 100: "Normal", 115: "Large", 130: "Larger", 150: "Extra large", 175: "Huge"}
+
 
 class ConfigError(Exception):
     pass

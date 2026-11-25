@@ -3,12 +3,12 @@
   const { $, api, toast, h } = ft;
   const root = $('#practice'); const sid = root.dataset.session; const examId = root.dataset.exam;
   const stage = $('#stage'); const L = 'ABCDEFGH';
-  let state = null, cur = null, selected = new Set(), phase = 'answer', busy = false, gpt = false;
+  let answered = 0, reviewing = false, state = null, cur = null, selected = new Set(), phase = 'answer', busy = false, gpt = false;
 
   const setProgress = (done, total) => {
     const pct = total ? Math.round(100 * done / total) : 0;
     $('#pbar i').style.width = pct + '%'; $('#pbar').setAttribute('aria-valuenow', pct);
-    $('#pcount').textContent = `${done} / ${total} answered`;
+    $('#pcount').textContent = `${done} / ${total} answered`; answered = done;
   };
 
   async function load() {
@@ -16,7 +16,7 @@
     setProgress(state.answered, state.total);
     const q = await api('GET', `/ui/sessions/${sid}/question`);
     if (q.done) return showSummary();
-    cur = q.question; selected = new Set(); phase = 'answer';
+    cur = q.question; selected = new Set(); phase = 'answer'; reviewing = false;
     render(q.index, q.total);
   }
 
@@ -34,14 +34,57 @@
       stage.append(list);
       stage.append(h('div', { class: 'row', id: 'actions' },
         h('button', { class: 'btn', id: 'submit', type: 'button', disabled: true, onclick: submit }, 'Submit'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: skip }, 'Skip')));
+        h('button', { class: 'btn ghost', type: 'button', onclick: skip }, 'Skip'), prevBtn()));
     } else {
       stage.append(h('div', { class: 'row', id: 'actions' },
         h('button', { class: 'btn', id: 'reveal', type: 'button', onclick: reveal }, 'Reveal answer (R)'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: skip }, 'Skip')));
+        h('button', { class: 'btn ghost', type: 'button', onclick: skip }, 'Skip'), prevBtn()));
     }
     stage.append(h('div', { id: 'feedback', class: 'feedback', 'aria-live': 'polite' }));
     const first = stage.querySelector('.opt, #reveal'); if (first) first.focus({ preventScroll: true });
+  }
+
+  // Previous question: a read-only look at what was already answered (progress is not changed).
+  // While the feedback of the just-answered question is showing, that one is the last history item.
+  const histPos = () => (phase === 'answer' ? answered : answered - 1) - 1;
+  function prevBtn() {
+    const pos = histPos();
+    return pos >= 0 ? h('button', { class: 'btn ghost', id: 'prev', type: 'button', onclick: () => review(pos) }, '← Previous (P)') : document.createDocumentFragment();
+  }
+
+  async function review(n) {
+    if (busy) return;
+    busy = true;
+    try {
+      const d = await api('GET', `/ui/sessions/${sid}/history/${n}`);
+      const q = d.question, f = d.feedback; reviewing = true; phase = 'review'; cur = q; cur.reviewIndex = n;
+      stage.replaceChildren(h('p', { class: 'small muted' }, `Reviewing question ${d.index} of ${d.count} answered`),
+        h('p', { class: 'qtext', id: 'qtext' }, q.text));
+      if (q.qtype === 'mc') {
+        const list = h('ul', { class: 'optlist', role: 'group', 'aria-labelledby': 'qtext' });
+        q.options.forEach((o, i) => {
+          const right = f.correct_indexes.includes(i), picked = f.chosen.includes(i);
+          const b = h('button', { class: 'opt' + (right ? ' is-right' : '') + (f.correct !== null && picked && !right ? ' is-wrong' : ''), type: 'button', disabled: true },
+            h('span', { class: 'k' }, L[i]), h('span', {}, o), h('span', { class: 'mark' }, right ? '✔' : (picked && f.correct !== null ? '✘' : (picked ? '•' : ''))));
+          list.append(h('li', {}, b));
+        });
+        stage.append(list);
+      } else if (f.answer) stage.append(h('div', { class: 'open-answer' }, f.answer));
+      const fb = h('div', { id: 'feedback', class: 'feedback' });
+      fb.append(d.skipped ? h('div', { class: 'verdict neutral', role: 'status' }, 'Skipped') : verdict(f));
+      if (f.explanation) fb.append(h('p', {}, h('b', {}, 'Explanation: '), f.explanation));
+      fb.append(h('div', { id: 'ai' })); stage.append(fb); renderAi(f.ai, f.disputed);
+      stage.append(h('div', { class: 'row', id: 'actions' },
+        n > 0 ? h('button', { class: 'btn ghost', id: 'prev', type: 'button', onclick: () => review(n - 1) }, '← Previous (P)') : null,
+        h('button', { class: 'btn', id: 'next', type: 'button', onclick: reviewNext },
+          n + 1 < d.count ? 'Next (Enter)' : 'Continue (Enter)')));
+      $('#next').focus();
+    } catch (e) { toast(e.message, true); } finally { busy = false; }
+  }
+  function reviewNext() {
+    const n = cur.reviewIndex + 1;
+    // the question whose feedback was open before reviewing is the last history item: go back to it via load()
+    if (n < answered) review(n); else load().catch((e) => toast(e.message, true));
   }
 
   function toggle(i) {
@@ -59,7 +102,7 @@
     wrap(async () => {
       const btn = $('#submit'); btn.disabled = true; if (!cur.has_key && gpt) btn.textContent = 'Asking ChatGPT…';
       const r = await api('POST', `/ui/sessions/${sid}/answer`, { question_id: cur.id, chosen: [...selected].sort() });
-      phase = 'feedback'; showFeedback(r); setProgress(r.progress.answered, r.progress.total);
+      phase = 'feedback'; setProgress(r.progress.answered, r.progress.total); showFeedback(r);
       if (r.needs_check && gpt) check();
     });
   }
@@ -82,7 +125,7 @@
     if (r.explanation) fb.append(h('p', {}, h('b', {}, 'Explanation: '), r.explanation));
     fb.append(h('div', { id: 'ai' }));
     renderAi(r.ai, r.disputed);
-    const act = $('#actions'); act.replaceChildren(h('button', { class: 'btn', id: 'next', type: 'button', onclick: next }, 'Next (Enter)'));
+    const act = $('#actions'); act.replaceChildren(h('button', { class: 'btn', id: 'next', type: 'button', onclick: next }, 'Next (Enter)'), prevBtn());
     $('#next').focus();
   }
 
@@ -131,7 +174,7 @@
     wrap(async () => {
       const r = await api('POST', `/ui/sessions/${sid}/answer`, { question_id: cur.id, self_correct: ok });
       phase = 'feedback'; setProgress(r.progress.answered, r.progress.total);
-      $('#actions').replaceChildren(h('button', { class: 'btn', id: 'next', type: 'button', onclick: next }, 'Next (Enter)'));
+      $('#actions').replaceChildren(h('button', { class: 'btn', id: 'next', type: 'button', onclick: next }, 'Next (Enter)'), prevBtn());
       $('#next').focus();
     });
   }
@@ -164,6 +207,12 @@
     if (e.ctrlKey || e.metaKey || e.altKey || ft.typing(e) || keys.open || !cur) return;
     const k = e.key.toLowerCase();
     if (k === '?') { keys.showModal(); return; }
+    if (phase === 'review') {
+      if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); reviewNext(); }
+      else if ((k === 'p' || e.key === 'ArrowLeft') && cur.reviewIndex > 0) review(cur.reviewIndex - 1);
+      return;
+    }
+    if ((k === 'p' || e.key === 'ArrowLeft') && histPos() >= 0 && phase !== 'self') { review(histPos()); return; }
     if (phase === 'answer' && cur.qtype === 'mc') {
       const n = /^[1-8]$/.test(k) ? Number(k) - 1 : L.toLowerCase().indexOf(k);
       if (k.length === 1 && n >= 0 && n < cur.options.length) { toggle(n); e.preventDefault(); return; }

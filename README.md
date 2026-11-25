@@ -28,7 +28,7 @@ One container, one SQLite file, no external services required.
 - **ChatGPT check of every question**: compares ChatGPT's answer with your key, adds a short explanation and a
   *suggested* reference link, and supplies a key when your source has none. Disputed questions are flagged; one click
   adopts ChatGPT's answer. Links come from the model: verify them before relying on them.
-- 5 themes (2 light, 3 dark, AA contrast), 5 bundled fonts, responsive, installable PWA, keyboard shortcuts.
+- 5 themes (2 light, 3 dark, AA contrast), 5 bundled fonts and adjustable text size, responsive, installable PWA, keyboard shortcuts.
 - Weekly backups (SQLite online backup), export, import/restore with safety copy.
 - `/health` and `/ready`, structured logs with a log viewer, About page with changelog and update notice.
 
@@ -122,4 +122,4 @@ the default login redirects to the forced password change. Screenshots: `scripts
 [CHANGELOG](CHANGELOG.md) · [Architecture](docs/architecture.md) · [API](docs/api.md) · [CLAUDE.md](CLAUDE.md)
 
 ## Keyboard shortcuts (practice)
-`1`–`8` or `A`–`H` select · `Enter` submit / next · `S` skip · `R` reveal (open questions) · `Y`/`N` self-grade · `?` help
+`1`–`8` or `A`–`H` select · `Enter` submit / next · `S` skip · `P` or `←` previous question · `R` reveal (open questions) · `Y`/`N` self-grade · `?` help

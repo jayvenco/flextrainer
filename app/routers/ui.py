@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..config import FONTS, THEMES
+from ..config import FONT_SIZES, FONTS, THEMES
 from ..database import get_db
 from ..deps import throttled, ui_user
 from ..models import Attempt, Exam, PracticeSession, Question, Source, User, now
@@ -50,6 +50,7 @@ def _session(db: Session, sid: int) -> PracticeSession:
 class AppearanceIn(BaseModel):
     theme: str | None = None
     font: str | None = None
+    size: int | None = None
 
 
 @router.post("/appearance")
@@ -62,8 +63,12 @@ def appearance(body: AppearanceIn, user: User = Depends(ui_user), db: Session = 
         if body.font not in FONTS:
             raise HTTPException(422, "Unknown font")
         user.font = body.font
+    if body.size is not None:
+        if body.size not in FONT_SIZES:
+            raise HTTPException(422, "Unknown text size")
+        user.font_size = body.size
     db.commit()
-    return {"theme": user.theme, "font": user.font}
+    return {"theme": user.theme, "font": user.font, "size": user.font_size}
 
 
 # ---------- exams ----------
@@ -471,6 +476,28 @@ def current_question(sid: int, user: User = Depends(ui_user), db: Session = Depe
             "has_key": bool(q.effective_correct),
             "checked": q.verify_status != "unchecked",
         },
+    }
+
+
+@router.get("/sessions/{sid}/history/{n}")
+def history(sid: int, n: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    """Read-only look at the n-th (0-based) question already answered in this session, in session order."""
+    s = _session(db, sid)
+    latest: dict[int, Attempt] = {}
+    for a in db.query(Attempt).filter(Attempt.session_id == s.id).order_by(Attempt.id):
+        latest[a.question_id] = a
+    live = {i for (i,) in db.query(Question.id).filter(Question.id.in_(s.order or [0]))}
+    seen = [i for i in s.order if i in live and i in latest]
+    if n < 0 or n >= len(seen):
+        raise HTTPException(404, "No such question in the history.")
+    q, a = _question(db, seen[n]), latest[seen[n]]
+    chosen = json.loads(a.chosen_json or "[]")
+    return {
+        "index": n + 1,
+        "count": len(seen),
+        "question": {**exams.question_json(q, full=False), "multi": len(q.effective_correct) > 1},
+        "skipped": a.skipped,
+        "feedback": _feedback(q, a.correct, chosen),
     }
 
 

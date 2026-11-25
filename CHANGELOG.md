@@ -4,6 +4,8 @@ All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 ### Added
+- Practice: **Previous question** (button, `P` or `←`) shows already answered questions read-only, with your answer and the result; progress is not changed.
+- Settings: Appearance section with theme, font and **text size** (85-175%), saved per account. Existing databases are upgraded automatically.
 - Manage existing exams: add questions by hand, paste text as a source, rename sources, remove a source but keep its questions, reset progress per question, select and delete several questions, duplicate an exam; Duplicate/Reset/Delete on the overview cards.
 - Generate multiple choice from example questions or study material with ChatGPT (checkbox on upload and scrape; automatic when no multiple choice is found).
 

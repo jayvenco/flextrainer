@@ -14,10 +14,11 @@ Internal UI endpoints (prefix `/ui`, cookie session):
 
 | Area | Endpoints |
 | --- | --- |
-| Appearance | `POST /ui/appearance` |
+| Appearance | `POST /ui/appearance` (`theme`, `font`, `size` = 85, 100, 115, 130, 150 or 175) |
 | Exams | `POST /ui/exams`, `PATCH|DELETE /ui/exams/{id}`, `POST /ui/exams/{id}/reset` |
 | Manage | `POST /ui/exams/{id}/duplicate`, `POST /ui/exams/{id}/questions` (add), `POST /ui/exams/{id}/questions/delete` (`{ids}`), `POST /ui/questions/{id}/reset`, `PATCH /ui/sources/{id}`, `DELETE /ui/sources/{id}?keep_questions=true`, `POST /ui/exams/{id}/paste` |
 | Import | `POST /ui/exams/{id}/upload`, `POST /ui/exams/{id}/scrape`, `DELETE /ui/sources/{id}` | Optional fields: `ai`, `generate` (ChatGPT generates multiple choice from the material).
+| Practice history | `GET /ui/sessions/{id}/history/{n}` (read-only look at the n-th answered question) |
 | Questions | `GET|PATCH|DELETE /ui/questions/{id}`, `POST …/verify`, `POST …/accept-ai`, `POST …/reveal` |
 | ChatGPT bulk check | `POST /ui/exams/{id}/verify[?redo=true]`, `GET /ui/exams/{id}/verify/status` |
 | Practice | `POST /ui/exams/{id}/sessions`, `GET /ui/sessions/{id}[/question|/summary]`, `POST /ui/sessions/{id}/answer`, `DELETE /ui/sessions/{id}` |

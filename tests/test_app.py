@@ -285,3 +285,24 @@ def test_manage_exam_questions_and_sources(auth):
     assert c.post(f"/ui/exams/{dup}/questions/delete", json={"ids": ids[:2]}).json()["deleted"] == 2
     # ids of another exam are never touched
     assert c.post(f"/ui/exams/{dup}/questions/delete", json={"ids": [q["id"]]}).json()["deleted"] == 0
+
+
+def test_history_and_text_size(auth):
+    c = auth
+    exam = c.post("/ui/exams", json={"title": "Hist"}).json()["id"]
+    c.post(f"/ui/exams/{exam}/paste", json={"text": EXAM_MD.decode()})
+    sid = c.post(f"/ui/exams/{exam}/sessions", json={"mode": "all", "count": None, "shuffle": False}).json()["id"]
+    assert c.get(f"/ui/sessions/{sid}/history/0").status_code == 404  # nothing answered yet
+    first = c.get(f"/ui/sessions/{sid}/question").json()["question"]
+    c.post(f"/ui/sessions/{sid}/answer", json={"question_id": first["id"], "chosen": [0]})
+    second = c.get(f"/ui/sessions/{sid}/question").json()["question"]
+    c.post(f"/ui/sessions/{sid}/answer", json={"question_id": second["id"], "skip": True})
+    h0 = c.get(f"/ui/sessions/{sid}/history/0").json()
+    assert h0["question"]["id"] == first["id"] and h0["count"] == 2 and h0["feedback"]["chosen"] == [0]
+    assert c.get(f"/ui/sessions/{sid}/history/1").json()["skipped"] is True
+    assert c.get(f"/ui/sessions/{sid}/history/2").status_code == 404
+    # text size: saved, validated, rendered
+    assert c.post("/ui/appearance", json={"size": 130}).json()["size"] == 130
+    assert c.post("/ui/appearance", json={"size": 99}).status_code == 422
+    assert 'data-size="130"' in c.get("/settings").text
+    c.post("/ui/appearance", json={"size": 100})

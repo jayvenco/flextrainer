@@ -3,7 +3,17 @@
 {% block body %}
 <div class="hero"><h1>Settings</h1></div>
 <section class="card"><h2>Appearance</h2>
-  <p class="muted small">Use the theme and font menus in the top bar; your choice is saved to your account.</p>
+  <p class="muted small">Saved to your account and applied everywhere. The menus in the top bar change the same settings.</p>
+  <div class="grid two">
+    <div><label class="f" for="set-theme">Theme</label>
+      <select id="set-theme" data-appearance="theme">{% for k, v in THEMES.items() %}<option value="{{ k }}" {{ 'selected' if k == theme }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label class="f" for="set-font">Font</label>
+      <select id="set-font" data-appearance="font">{% for k, v in FONTS.items() %}<option value="{{ k }}" {{ 'selected' if k == font }}>{{ v[0] }}</option>{% endfor %}</select></div>
+    <div><label class="f" for="set-size">Text size</label>
+      <select id="set-size" data-appearance="size">{% for k, v in FONT_SIZES.items() %}<option value="{{ k }}" {{ 'selected' if k == font_size }}>{{ v }} ({{ k }}%)</option>{% endfor %}</select></div>
+  </div>
+  <div class="card preview"><p class="qtext">Which layer of the OSI model handles routing?</p>
+    <p>Preview: the quick brown fox jumps over the lazy dog. 0123456789</p></div>
   <p><a class="btn ghost" href="{{ base }}/account/password">Change password</a></p></section>
 
 <section class="card"><h2>ChatGPT</h2>

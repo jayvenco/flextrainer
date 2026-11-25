@@ -42,6 +42,7 @@
     sel.addEventListener('change', async () => {
       const kind = sel.dataset.appearance;
       document.documentElement.dataset[kind] = sel.value;
+      document.querySelectorAll(`[data-appearance="${kind}"]`).forEach((o) => { o.value = sel.value; });
       if (!$('.nav a')) return; // login page: nothing to persist
       try { await ft.api('POST', '/ui/appearance', { [kind]: sel.value }); } catch (e) { ft.toast(e.message, true); }
     });
