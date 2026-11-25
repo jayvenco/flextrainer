@@ -41,7 +41,7 @@
   function showResults(results) {
     const box = $('#import-result'); box.replaceChildren();
     results.forEach((r) => {
-      const msg = r.added ? `${r.added} question(s) added` + (r.duplicates ? `, ${r.duplicates} duplicate(s) skipped` : '') : (r.error || 'Nothing added');
+      const msg = r.added ? `${r.added} question(s) added` + (r.images ? `, ${r.images} picture(s) attached` : '') + (r.duplicates ? `, ${r.duplicates} duplicate(s) skipped` : '') : (r.error || 'Nothing added');
       box.append(h('div', { class: 'res' }, h('b', {}, r.name), ': ', msg, r.added && r.error ? ' (' + r.error + ')' : ''));
     });
     if (results.some((r) => r.added)) box.append(h('p', {}, h('button', { class: 'btn', type: 'button', onclick: reload }, 'Show questions')));
@@ -124,14 +124,28 @@
   // edit dialog
   const qd = $('#q-dialog'); let editing = null;
   on('#q-cancel', 'click', () => qd.close());
+  const drawPics = (q) => {
+    const box = $('#q-pics'); box.replaceChildren();
+    (q.images || []).forEach((iid) => box.append(h('span', { class: 'qpic' },
+      h('img', { class: 'qimg', src: `${ft.BASE}/ui/images/${iid}`, alt: 'Picture' }),
+      h('button', { class: 'btn danger sm', type: 'button', onclick: async () => {
+        try { drawPics(await api('DELETE', `/ui/questions/${q.id}/images/${iid}`)); } catch (err) { toast(err.message, true); }
+      } }, 'Remove'))));
+  };
+  on('#q-pic-file', 'change', async (e) => {
+    const f = e.target.files[0]; if (!f || !editing) return;
+    const fd = new FormData(); fd.append('file', f);
+    try { drawPics(await api('POST', `/ui/questions/${editing}/images`, fd)); } catch (err) { toast(err.message, true); }
+    e.target.value = '';
+  });
   on('#add-q', 'click', () => {
-    editing = null; $('#q-title').textContent = 'Add question';
+    editing = null; $('#q-title').textContent = 'Add question'; $('#q-pics-box').classList.add('hidden');
     ['#q-text', '#q-options', '#q-correct', '#q-answer', '#q-expl'].forEach((i) => { $(i).value = ''; });
     qd.showModal();
   });
   document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', async () => {
     try {
-      const q = await api('GET', '/ui/questions/' + b.dataset.edit); editing = q.id; $('#q-title').textContent = 'Edit question';
+      const q = await api('GET', '/ui/questions/' + b.dataset.edit); editing = q.id; $('#q-title').textContent = 'Edit question'; $('#q-pics-box').classList.remove('hidden'); drawPics(q);
       $('#q-text').value = q.text; $('#q-options').value = q.options.join('\n');
       $('#q-correct').value = q.correct.map((i) => 'ABCDEFGH'[i]).join(',');
       $('#q-answer').value = q.answer_text; $('#q-expl').value = q.explanation; qd.showModal();

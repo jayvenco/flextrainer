@@ -32,6 +32,9 @@ def migrate() -> None:
         cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)"))}
         if cols and "font_size" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN font_size INTEGER NOT NULL DEFAULT 100"))
+        qcols = {r[1] for r in conn.execute(text("PRAGMA table_info(questions)"))}
+        if qcols and "images_json" not in qcols:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN images_json TEXT NOT NULL DEFAULT '[]'"))
 
 
 def get_db():

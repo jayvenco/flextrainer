@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -56,6 +56,19 @@ class Source(Base):
     exam: Mapped[Exam] = relationship(back_populates="sources")
 
 
+class Image(Base):
+    """Picture that belongs to questions of one exam (stored in the database so backups include it)."""
+
+    __tablename__ = "images"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), index=True)
+    sha1: Mapped[str] = mapped_column(String(40))
+    mime: Mapped[str] = mapped_column(String(32))
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+
+
 class Question(Base):
     __tablename__ = "questions"
     __table_args__ = (UniqueConstraint("exam_id", "fingerprint", name="uq_question_fp"),)
@@ -70,6 +83,7 @@ class Question(Base):
     answer_text: Mapped[str] = mapped_column(Text, default="")  # reference answer for open questions
     explanation: Mapped[str] = mapped_column(Text, default="")
     fingerprint: Mapped[str] = mapped_column(String(40))
+    images_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")  # ids in the images table
     # ChatGPT check
     verify_status: Mapped[str] = mapped_column(String(16), default="unchecked")
     # unchecked | confirmed | disputed | answered | error
@@ -84,6 +98,10 @@ class Question(Base):
     @property
     def options(self) -> list[str]:
         return json.loads(self.options_json or "[]")
+
+    @property
+    def images(self) -> list[int]:
+        return json.loads(self.images_json or "[]")
 
     @property
     def correct(self) -> list[int]:

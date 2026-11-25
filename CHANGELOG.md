@@ -3,7 +3,12 @@
 All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachangelog.com), versions follow SemVer.
 
 ## [Unreleased]
+### Added
+- Pictures that belong to a question are imported and shown with it (practice, review and exam page): PDF (placed where the picture is drawn), Word, Markdown (`data:` URIs and http(s) URLs) and scraped pages. Add or remove pictures per question in the editor. ChatGPT sees the pictures when it checks a question (up to 3, skipped if the model refuses images). Logos repeated on many questions are ignored; big pictures are scaled to 1600 px; SVG is not accepted. Pictures live in the database, so backups include them.
+- New dependency: Pillow (picture validation and scaling).
+
 ### Fixed
+- A corrupt Word file now gives a clear error instead of a server error.
 - Import: questions glued together are now split: unnumbered consecutive questions, and PDF/Word text where options, answers and the next question ended up on one line.
 
 ### Added

@@ -124,3 +124,14 @@ def test_prose_with_letters_is_not_split():
         "1. Vitamin A. B. and C are important, so which one is a vitamin found in carrots and oranges?\nA. Vitamin A\nB. Iron\nAnswer: A\n"
     )
     assert len(qs) == 1 and qs[0]["options"] == ["Vitamin A", "Iron"]
+
+
+def test_corrupt_docx_gives_a_clean_error():
+    import pytest
+
+    good = io.BytesIO()
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.writestr("word/document.xml", "<x/>" * 50)
+    broken = good.getvalue()[:-30]  # truncated archive
+    with pytest.raises(extract.ExtractError):
+        extract.extract_text("broken.docx", broken)

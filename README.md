@@ -16,7 +16,7 @@ One container, one SQLite file, no external services required.
 - **Main menu with one card per exam**: questions, mastered, to review, accuracy, and a *Resume* button.
 - **Import**: PDF, Word (`.docx`, including auto-numbered A/B/C lists), Markdown and text. Recognises numbered questions,
   lettered options, `Answer:`/`Antwoord:` lines, explanations, markdown checkboxes and a trailing answer key.
-  Duplicates are skipped. Optional **AI-assisted import** for material the parser cannot read.
+  Pictures that belong to a question are imported with it (PDF, Word, Markdown, web pages). Duplicates are skipped. Optional **AI-assisted import** for material the parser cannot read.
   With a ChatGPT key, **multiple choice is generated from your examples** (open or numbered questions, study text);
   questions already written as multiple choice are kept as they are. If the parser finds no multiple choice at all,
   generation runs automatically.

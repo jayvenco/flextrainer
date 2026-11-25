@@ -139,3 +139,8 @@ kbd{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding
 .card-actions { margin-top: .5rem; flex-wrap: wrap; }
 details.paste { margin: .75rem 0; }
 details.paste > summary { cursor: pointer; font-weight: 600; }
+
+/* question pictures */
+.qimgs{display:flex;flex-wrap:wrap;gap:10px;margin:.4rem 0 .9rem}
+.qimg{display:block;max-width:100%;max-height:360px;border-radius:10px;border:1px solid var(--line);background:#fff;object-fit:contain}
+.qpic{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.qpic .qimg{max-height:120px}

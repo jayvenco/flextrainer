@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -16,8 +17,8 @@ from sqlalchemy.orm import Session
 from ..config import FONT_SIZES, FONTS, THEMES
 from ..database import get_db
 from ..deps import throttled, ui_user
-from ..models import Attempt, Exam, PracticeSession, Question, Source, User, now
-from ..services import backup, exams, extract, gpt, parser, scraper, store
+from ..models import Attempt, Exam, Image, PracticeSession, Question, Source, User, now
+from ..services import backup, exams, extract, gpt, images, parser, scraper, store
 
 log = logging.getLogger("flextrainer.ui")
 router = APIRouter(prefix="/ui", include_in_schema=False)
@@ -118,6 +119,21 @@ def duplicate_exam(exam_id: int, user: User = Depends(ui_user), db: Session = De
     copy = Exam(title=f"{e.title} (copy)"[:200], description=e.description)
     db.add(copy)
     db.flush()
+    copied: dict[int, int] = {}
+
+    def copy_image(iid: int) -> int | None:
+        if iid not in copied:
+            src = db.get(Image, iid)
+            if not src:
+                return None
+            row = Image(
+                exam_id=copy.id, sha1=src.sha1, mime=src.mime, width=src.width, height=src.height, data=src.data
+            )
+            db.add(row)
+            db.flush()
+            copied[iid] = row.id
+        return copied[iid]
+
     parsed = [
         {
             "text": q.text,
@@ -126,6 +142,7 @@ def duplicate_exam(exam_id: int, user: User = Depends(ui_user), db: Session = De
             "qtype": q.qtype,
             "explanation": q.explanation,
             "answer_text": q.answer_text,
+            "images": [n for n in (copy_image(i) for i in q.images) if n],
         }
         for q in sorted(e.questions, key=lambda x: x.position)
     ]
@@ -136,9 +153,57 @@ def duplicate_exam(exam_id: int, user: User = Depends(ui_user), db: Session = De
 # ---------- import ----------
 
 
+MAX_REMOTE_IMAGES = 40
+
+
+def _resolve_images(db: Session, exam: Exam, items: list[dict], sources: dict) -> int:
+    """Turn the picture keys of parsed questions into stored picture ids. Returns the number of pictures kept."""
+    used = {k for it in items for k in it.get("images", [])}
+    if not used:
+        return 0
+    prepared: dict[str, tuple[bytes, str, int, int]] = {}
+    fetched = 0
+    for key in sorted(used):
+        src = sources.get(key)
+        if isinstance(src, str):  # remote picture: fetch it (public hosts only)
+            if fetched >= MAX_REMOTE_IMAGES:
+                continue
+            fetched += 1
+            src = scraper.fetch_image(src)
+        norm = images.normalise(src) if src else None
+        if norm:
+            prepared[key] = norm
+    # a picture that sits on many questions is a logo or page decoration, not part of a question
+    users: dict[str, int] = {}
+    for it in items:
+        for sha in {hashlib.sha1(prepared[k][0]).hexdigest() for k in it.get("images", []) if k in prepared}:
+            users[sha] = users.get(sha, 0) + 1
+    decor = {sha for sha, n in users.items() if n >= 4 and len(items) >= 6 and n > len(items) // 2}
+    ids: dict[str, int] = {}
+    for it in items:
+        out: list[int] = []
+        for k in it.get("images", []):
+            if k not in prepared or hashlib.sha1(prepared[k][0]).hexdigest() in decor:
+                continue
+            if k not in ids:
+                ids[k] = images.save(db, exam.id, prepared[k]).id
+            if ids[k] not in out:
+                out.append(ids[k])
+        it["images"] = out[: images.MAX_PER_QUESTION]
+    return len(set(ids.values()))
+
+
 def _ingest(
-    db: Session, exam: Exam, text: str, name: str, kind: str, url: str, use_ai: bool, generate: bool = False
+    db: Session,
+    exam: Exam,
+    doc: extract.Doc,
+    name: str,
+    kind: str,
+    url: str,
+    use_ai: bool,
+    generate: bool = False,
 ) -> dict:
+    text = doc.text
     parsed = parser.parse_questions(text)
     note = ""
     cfg = store.openai_config(db)
@@ -161,16 +226,25 @@ def _ingest(
     elif not has_mc and not parsed:
         note = "No questions recognised. Add a ChatGPT key in Settings to enable AI-assisted import."
     if not parsed:
-        return {"name": name, "found": 0, "added": 0, "duplicates": 0, "error": note or "No questions found."}
+        return {
+            "name": name,
+            "found": 0,
+            "added": 0,
+            "duplicates": 0,
+            "images": 0,
+            "error": note or "No questions found.",
+        }
+    n_images = _resolve_images(db, exam, parsed, doc.images)
     src = Source(exam_id=exam.id, kind=kind, name=name[:300], url=url[:2000])
     db.add(src)
     db.flush()
     added, dupes = exams.add_questions(db, exam, parsed, src)
     if added == 0:
         db.delete(src)
-        db.commit()
-    log.info("Imported %s: %d found, %d added, %d duplicates", name, len(parsed), added, dupes)
-    return {"name": name, "found": len(parsed), "added": added, "duplicates": dupes, "error": note}
+    db.commit()
+    images.prune(db, exam.id)
+    log.info("Imported %s: %d found, %d added, %d duplicates, %d pictures", name, len(parsed), added, dupes, n_images)
+    return {"name": name, "found": len(parsed), "added": added, "duplicates": dupes, "images": n_images, "error": note}
 
 
 @router.post("/exams/{exam_id}/upload")
@@ -190,8 +264,8 @@ def upload(
         name = (f.filename or "file").rsplit("/", 1)[-1]
         try:
             data = f.file.read(extract.MAX_BYTES + 1)
-            text = extract.extract_text(name, data)
-            results.append(_ingest(db, e, text, name, "file", "", ai, generate))
+            doc = extract.extract_document(name, data)
+            results.append(_ingest(db, e, doc, name, "file", "", ai, generate))
         except extract.ExtractError as exc:
             results.append({"name": name, "found": 0, "added": 0, "duplicates": 0, "error": str(exc)})
     return {"results": results}
@@ -212,8 +286,8 @@ def scrape(exam_id: int, body: ScrapeIn, user: User = Depends(throttled), db: Se
         if not url:
             continue
         try:
-            text, title = scraper.fetch(url)
-            results.append(_ingest(db, e, text, title or url, "url", url, body.ai, body.generate))
+            doc, title = scraper.fetch(url)
+            results.append(_ingest(db, e, doc, title or url, "url", url, body.ai, body.generate))
         except scraper.ScrapeError as exc:
             results.append({"name": url, "found": 0, "added": 0, "duplicates": 0, "error": str(exc)})
     return {"results": results}
@@ -230,7 +304,7 @@ class PasteIn(BaseModel):
 def paste(exam_id: int, body: PasteIn, user: User = Depends(throttled), db: Session = Depends(get_db)):
     e = _exam(db, exam_id)
     name = body.name.strip() or "Pasted text"
-    return {"results": [_ingest(db, e, body.text, name, "file", "", body.ai, body.generate)]}
+    return {"results": [_ingest(db, e, extract.markdown_doc(body.text), name, "file", "", body.ai, body.generate)]}
 
 
 class SourceIn(BaseModel):
@@ -261,8 +335,10 @@ def delete_source(
         rows.update({Question.source_id: None})
     else:
         rows.delete()
+    exam_id = s.exam_id
     db.delete(s)
     db.commit()
+    images.prune(db, exam_id)
     return {"ok": True}
 
 
@@ -316,6 +392,7 @@ def delete_questions(exam_id: int, body: IdsIn, user: User = Depends(ui_user), d
         db.delete(q)
         n += 1
     db.commit()
+    images.prune(db, e.id)
     return {"deleted": n}
 
 
@@ -341,7 +418,7 @@ def edit_question(qid: int, body: QuestionIn, user: User = Depends(ui_user), db:
     q.text, q.options_json = body.text.strip(), json.dumps(options)
     q.correct_json, q.explanation = json.dumps(sorted(set(body.correct))), body.explanation.strip()
     q.answer_text = body.answer_text.strip()
-    q.fingerprint = parser.fingerprint(q.text, options)
+    q.fingerprint = parser.fingerprint(q.text, options, images.shas(db, q.images))
     q.verify_status, q.verify_note, q.verify_link = "unchecked", "", ""
     q.ai_correct_json, q.ai_answer, q.verified_at = "[]", "", None
     try:
@@ -354,9 +431,61 @@ def edit_question(qid: int, body: QuestionIn, user: User = Depends(ui_user), db:
 
 @router.delete("/questions/{qid}")
 def delete_question(qid: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
-    db.delete(_question(db, qid))
+    q = _question(db, qid)
+    exam_id = q.exam_id
+    db.delete(q)
     db.commit()
+    images.prune(db, exam_id)
     return {"ok": True}
+
+
+# ---------- question pictures ----------
+
+
+@router.get("/images/{image_id}")
+def get_image(image_id: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    img = db.get(Image, image_id)
+    if not img:
+        raise HTTPException(404, "Picture not found")
+    return Response(
+        img.data,
+        media_type=img.mime,
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+def _set_images(db: Session, q: Question, ids: list[int]) -> None:
+    q.images_json = json.dumps(ids)
+    q.fingerprint = parser.fingerprint(q.text, q.options, images.shas(db, ids))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Another question in this exam is identical.") from None
+    images.prune(db, q.exam_id)
+
+
+@router.post("/questions/{qid}/images")
+def add_question_image(
+    qid: int, file: Annotated[UploadFile, File()], user: User = Depends(throttled), db: Session = Depends(get_db)
+):
+    q = _question(db, qid)
+    if len(q.images) >= images.MAX_PER_QUESTION:
+        raise HTTPException(422, f"A question can have at most {images.MAX_PER_QUESTION} pictures.")
+    data = file.file.read(images.MAX_INPUT_BYTES + 1)
+    img = images.store_image(db, q.exam_id, data, keep_small=True)
+    if not img:
+        raise HTTPException(422, "Use a PNG, JPEG, GIF or WebP picture of at most 8 MB.")
+    if img.id not in q.images:
+        _set_images(db, q, [*q.images, img.id])
+    return exams.question_json(q)
+
+
+@router.delete("/questions/{qid}/images/{image_id}")
+def remove_question_image(qid: int, image_id: int, user: User = Depends(ui_user), db: Session = Depends(get_db)):
+    q = _question(db, qid)
+    _set_images(db, q, [i for i in q.images if i != image_id])
+    return exams.question_json(q)
 
 
 @router.post("/questions/{qid}/verify")

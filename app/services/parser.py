@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from .extract import clean_markdown
 
 LETTERS = "ABCDEFGH"
+IMG_LINE_RE = re.compile(r"^\s*\u27e6img:([A-Za-z0-9_]+)\u27e7\s*$")
 
 Q_RE = re.compile(r"^\s*(?:(?:Q|Question|Vraag)\s*\.?\s*)?(?P<n>\d{1,4})\s*[\).:\-]\s+(?P<t>\S.*)$", re.I)
 Q_HEAD_RE = re.compile(r"^\s*(?:Question|Vraag|Q)\s*\.?\s*(?P<n>\d{1,4})\s*[:.\-)]?\s*$", re.I)
@@ -45,6 +46,7 @@ class ParsedQuestion:
     number: int | None = None
     qtype: str = "mc"
     checked: list[bool] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)  # picture keys (see extract.Doc)
 
     def to_dict(self) -> dict:
         return {
@@ -54,15 +56,18 @@ class ParsedQuestion:
             "explanation": self.explanation,
             "answer_text": self.answer_text,
             "qtype": self.qtype,
+            "images": self.images,
         }
 
 
-def fingerprint(text: str, options: list[str]) -> str:
+def fingerprint(text: str, options: list[str], image_shas: list[str] | None = None) -> str:
     norm = (
         re.sub(r"\W+", " ", text.lower()).strip()
         + "|"
         + "|".join(sorted(re.sub(r"\W+", " ", o.lower()).strip() for o in options))
     )
+    if image_shas:  # the same wording with a different picture is a different question
+        norm += "|img:" + ",".join(sorted(image_shas))
     return hashlib.sha1(norm.encode()).hexdigest()
 
 
@@ -152,6 +157,8 @@ def _finish(q: ParsedQuestion | None, out: list[ParsedQuestion]) -> None:
         q.qtype, q.options, q.correct = "open", [], []
     else:
         return
+    if len(q.text) < 3 and q.images:
+        q.text = "Look at the picture."
     if len(q.text) < 3:
         return
     out.append(q)
@@ -163,12 +170,14 @@ def parse_questions(raw: str) -> list[dict]:
     out: list[ParsedQuestion] = []
     cur: ParsedQuestion | None = None
     pending: list[str] = []
+    pending_imgs: list[str] = []
     mode = ""  # q | opt | expl | ans
 
     def start(text: str, number: int | None) -> ParsedQuestion:
-        nonlocal cur, mode
+        nonlocal cur, mode, pending_imgs
         _finish(cur, out)
-        cur = ParsedQuestion(text=text, number=number)
+        cur = ParsedQuestion(text=text, number=number, images=pending_imgs)
+        pending_imgs = []
         mode = "q"
         return cur
 
@@ -178,6 +187,8 @@ def parse_questions(raw: str) -> list[dict]:
         for k in range(i, min(len(lines), i + 4)):
             t = lines[k].strip()
             if not t:
+                continue
+            if IMG_LINE_RE.match(t):
                 continue
             m = OPT_RE.match(t)
             if (m and m["l"].upper() == "A") or CHK_RE.match(t):
@@ -193,6 +204,14 @@ def parse_questions(raw: str) -> list[dict]:
             continue
         s = line.strip()
         if not s:
+            continue
+        m = IMG_LINE_RE.match(s)
+        if m:
+            # a picture belongs to the question being read; after its answer it belongs to the next one
+            if cur is not None and mode in {"q", "opt"}:
+                cur.images.append(m[1])
+            else:
+                pending_imgs.append(m[1])
             continue
         m = ANS_RE.match(s)
         if m and cur is not None:
@@ -245,7 +264,9 @@ def parse_questions(raw: str) -> list[dict]:
         if cur is not None and mode in {"opt", "ans", "expl"} and (mode != "opt" or len(cur.options) >= 2):
             k = new_question_ahead(idx)
             if k is not None:
-                start(" ".join(t.strip() for t in lines[idx:k] if t.strip()), None)
+                chunk = [t.strip() for t in lines[idx:k] if t.strip()]
+                pending_imgs += [im[1] for t in chunk if (im := IMG_LINE_RE.match(t))]
+                start(" ".join(t for t in chunk if not IMG_LINE_RE.match(t)), None)
                 pending = []
                 skip_to = k
                 continue

@@ -86,9 +86,10 @@
   <div id="qlist">
   {% for q in questions %}
   <details class="q" data-status="{{ q.verify_status }}" data-nokey="{{ 1 if not q.correct and not q.ai_correct and q.qtype == 'mc' else 0 }}" data-id="{{ q.id }}">
-    <summary><input type="checkbox" class="qsel" value="{{ q.id }}" aria-label="Select question {{ loop.index }}"> <span class="qn">{{ loop.index }}.</span> {{ q.text }}
+    <summary><input type="checkbox" class="qsel" value="{{ q.id }}" aria-label="Select question {{ loop.index }}"> <span class="qn">{{ loop.index }}.</span> {{ q.text }}{% if q.images %} <span class="pill" title="This question has {{ q.images|length }} picture(s)">🖼 {{ q.images|length }}</span>{% endif %}
       <span class="pill st-{{ q.verify_status }}">{{ {'unchecked':'unchecked','confirmed':'confirmed','disputed':'disputed','answered':'ChatGPT answer','error':'check failed'}[q.verify_status] }}</span></summary>
     <div class="qbody">
+      {% if q.images %}<div class="qimgs">{% for iid in q.images %}<a href="{{ base }}/ui/images/{{ iid }}" target="_blank" rel="noopener"><img class="qimg" src="{{ base }}/ui/images/{{ iid }}" alt="Picture that belongs to the question" loading="lazy"></a>{% endfor %}</div>{% endif %}
       {% if q.qtype == 'mc' %}<ol class="opts" type="A">{% for o in q.options %}<li class="{{ 'right' if loop.index0 in q.correct }}{{ ' airight' if loop.index0 in q.ai_correct and loop.index0 not in q.correct }}">{{ o }}</li>{% endfor %}</ol>
       {% if not q.correct %}<p class="small muted">No answer key in the source{% if q.ai_correct %}; showing ChatGPT's answer{% endif %}.</p>{% endif %}
       {% else %}<p class="small"><b>Reference answer:</b> {{ q.answer_text or q.ai_answer or 'none yet' }}</p>{% endif %}
@@ -115,6 +116,9 @@
   <label class="f" for="q-correct">Correct option letters (e.g. B or A,C)</label><input id="q-correct" type="text" maxlength="30">
   <label class="f" for="q-answer">Reference answer (open questions)</label><textarea id="q-answer" rows="2"></textarea>
   <label class="f" for="q-expl">Explanation</label><textarea id="q-expl" rows="2"></textarea>
+  <div id="q-pics-box" class="hidden"><span class="f">Pictures</span>
+    <div id="q-pics" class="qimgs"></div>
+    <label class="f" for="q-pic-file">Add a picture (PNG, JPEG, GIF or WebP)</label><input id="q-pic-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></div>
   <div class="row end"><button class="btn ghost" type="button" id="q-cancel">Cancel</button><button class="btn" type="submit">Save</button></div>
 </form></dialog>
 <dialog id="src-dialog"><form method="dialog" id="src-form" class="dlg">

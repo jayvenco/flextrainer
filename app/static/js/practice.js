@@ -5,6 +5,11 @@
   const stage = $('#stage'); const L = 'ABCDEFGH';
   let answered = 0, reviewing = false, state = null, cur = null, selected = new Set(), phase = 'answer', busy = false, gpt = false;
 
+  const pics = (q) => (q.images || []).length
+    ? h('div', { class: 'qimgs' }, q.images.map((id) => h('a', { href: `${ft.BASE}/ui/images/${id}`, target: '_blank', rel: 'noopener' },
+      h('img', { class: 'qimg', src: `${ft.BASE}/ui/images/${id}`, alt: 'Picture that belongs to the question', loading: 'lazy' }))))
+    : null;
+
   const setProgress = (done, total) => {
     const pct = total ? Math.round(100 * done / total) : 0;
     $('#pbar i').style.width = pct + '%'; $('#pbar').setAttribute('aria-valuenow', pct);
@@ -23,7 +28,7 @@
   function render(index, total) {
     stage.replaceChildren();
     stage.append(h('p', { class: 'small muted' }, `Question ${index} of ${total}`),
-      h('p', { class: 'qtext', id: 'qtext' }, cur.text));
+      h('p', { class: 'qtext', id: 'qtext' }, cur.text), pics(cur));
     if (cur.qtype === 'mc') {
       if (cur.multi) stage.append(h('p', { class: 'hint' }, 'Select all that apply.'));
       const list = h('ul', { class: 'optlist', role: 'group', 'aria-labelledby': 'qtext' });
@@ -59,7 +64,7 @@
       const d = await api('GET', `/ui/sessions/${sid}/history/${n}`);
       const q = d.question, f = d.feedback; reviewing = true; phase = 'review'; cur = q; cur.reviewIndex = n;
       stage.replaceChildren(h('p', { class: 'small muted' }, `Reviewing question ${d.index} of ${d.count} answered`),
-        h('p', { class: 'qtext', id: 'qtext' }, q.text));
+        h('p', { class: 'qtext', id: 'qtext' }, q.text), pics(q));
       if (q.qtype === 'mc') {
         const list = h('ul', { class: 'optlist', role: 'group', 'aria-labelledby': 'qtext' });
         q.options.forEach((o, i) => {

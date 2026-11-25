@@ -240,7 +240,9 @@ def test_generate_multiple_choice_from_open_examples(auth, monkeypatch):
         # open question without options: parser finds no MC, so ChatGPT generates it automatically
         r = c.post(
             f"/ui/exams/{exam}/upload",
-            files={"files": ("o.md", io.BytesIO(b"1. What is the capital of France?\nAnswer: Paris\n"), "text/markdown")},
+            files={
+                "files": ("o.md", io.BytesIO(b"1. What is the capital of France?\nAnswer: Paris\n"), "text/markdown")
+            },
         ).json()["results"][0]
         assert r["added"] == 1 and not r["error"].startswith("AI-assisted import failed")
         page = c.get(f"/exams/{exam}")

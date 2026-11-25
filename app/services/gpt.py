@@ -5,6 +5,7 @@ The API key is never logged. Reference links are only *suggestions* from the mod
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -15,6 +16,7 @@ import httpx
 from .parser import LETTERS, fingerprint, letters_to_idx
 
 log = logging.getLogger("flextrainer.gpt")
+MAX_VISION_IMAGES = 3
 
 VERIFY_SYSTEM = (
     "You check exam questions. Reply ONLY with a JSON object with these keys: "
@@ -31,6 +33,8 @@ EXTRACT_SYSTEM = (
     "You extract exam questions from text. Reply ONLY with JSON: "
     '{"questions":[{"text":"...","options":["...","..."],"correct":["B"],"explanation":"...","answer":"..."}]}. '
     "Include only questions that actually appear in the text. Leave options empty for open questions. "
+    "The text may contain picture markers like \u27e6img:K1\u27e7: when a question uses a picture, add its keys "
+    '(e.g. ["K1"]) to an "images" array of that question; never invent keys. '
     'Use option letters in "correct" only when the text states the answer; otherwise use an empty array.'
 )
 
@@ -42,7 +46,9 @@ GENERATE_SYSTEM = (
     "Turn every other example question into a multiple choice question with 4 plausible options (A-D) and mark "
     "the correct letter(s) in the same language as the text. If the text has no questions, write questions that "
     "test its key facts. Distractors must be plausible but clearly wrong. Never include trivia that is not in the "
-    "text or common knowledge for the topic. Do not invent more than 40 questions per request."
+    "text or common knowledge for the topic. Do not invent more than 40 questions per request. "
+    "The text may contain picture markers like \u27e6img:K1\u27e7: when a question relies on a picture, add its "
+    'keys (e.g. ["K1"]) to an "images" array of that question; never invent keys.'
 )
 
 
@@ -50,7 +56,7 @@ class GptError(Exception):
     pass
 
 
-def _chat(cfg: dict, system: str, user: str, timeout: float = 90) -> dict:
+def _chat(cfg: dict, system: str, user: str | list, timeout: float = 90) -> dict:
     if not cfg.get("key"):
         raise GptError("No ChatGPT API key is configured (Settings -> ChatGPT).")
     body = {
@@ -106,7 +112,22 @@ def verify_question(cfg: dict, q: dict) -> dict:
     else:
         lines.append("This is an open question.")
         lines.append("Provided reference answer: " + (q["answer_text"] or "none"))
-    data = _chat(cfg, VERIFY_SYSTEM, "\n".join(lines))
+    text = "\n".join(lines)
+    pics = q.get("images") or []
+    if pics:
+        parts: list[dict] = [{"type": "text", "text": text + "\nThe question comes with the attached picture(s)."}]
+        for mime, blob in pics[:MAX_VISION_IMAGES]:
+            url = f"data:{mime};base64,{base64.b64encode(blob).decode()}"
+            parts.append({"type": "image_url", "image_url": {"url": url}})
+        try:
+            data = _chat(cfg, VERIFY_SYSTEM, parts)
+        except GptError as exc:
+            if "HTTP 400" not in str(exc):
+                raise
+            log.info("The model does not accept pictures; checking the question without them")
+            data = _chat(cfg, VERIFY_SYSTEM, text + "\n(The question has a picture that could not be sent.)")
+    else:
+        data = _chat(cfg, VERIFY_SYSTEM, text)
     correct_raw = data.get("correct") or []
     if isinstance(correct_raw, str):
         correct_raw = [correct_raw]
@@ -161,6 +182,7 @@ def _normalise(data: dict, force_mc: bool = False) -> list[dict]:
             options = [re.sub(r"\s+", " ", str(o)).strip() for o in (item.get("options") or []) if str(o).strip()]
             # drop leading "A. " style labels the model may have added
             options = [re.sub(r"^\(?[A-Ha-h][\).:]\s+", "", o) for o in options]
+            pics = [str(k) for k in (item.get("images") or []) if re.fullmatch(r"[A-Za-z0-9_]+", str(k))]
             if len(qtext) < 3:
                 continue
             if len(options) >= 2:
@@ -173,6 +195,7 @@ def _normalise(data: dict, force_mc: bool = False) -> list[dict]:
                         "qtype": "mc",
                         "explanation": str(item.get("explanation") or "").strip(),
                         "answer_text": "",
+                        "images": pics,
                     }
                 )
             elif not force_mc:
@@ -184,6 +207,7 @@ def _normalise(data: dict, force_mc: bool = False) -> list[dict]:
                         "qtype": "open",
                         "explanation": str(item.get("explanation") or "").strip(),
                         "answer_text": str(item.get("answer") or "").strip(),
+                        "images": pics,
                     }
                 )
         except (AttributeError, TypeError):

@@ -11,8 +11,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import Attempt, Exam, PracticeSession, Question, Source, now
-from . import gpt, store
+from ..models import Attempt, Exam, Image, PracticeSession, Question, Source, now
+from . import gpt, images, store
 from .parser import fingerprint
 
 
@@ -28,7 +28,8 @@ def add_questions(db: Session, exam: Exam, parsed: list[dict], source: Source | 
     pos = db.query(func.coalesce(func.max(Question.position), 0)).filter(Question.exam_id == exam.id).scalar() or 0
     added = dupes = 0
     for item in parsed:
-        fp = fingerprint(item["text"], item["options"])
+        img_ids = list(item.get("images") or [])[: images.MAX_PER_QUESTION]
+        fp = fingerprint(item["text"], item["options"], images.shas(db, img_ids))
         if fp in existing:
             dupes += 1
             continue
@@ -46,6 +47,7 @@ def add_questions(db: Session, exam: Exam, parsed: list[dict], source: Source | 
                 answer_text=item.get("answer_text", ""),
                 explanation=item.get("explanation", ""),
                 fingerprint=fp,
+                images_json=json.dumps(img_ids),
             )
         )
         added += 1
@@ -61,6 +63,7 @@ def question_json(q: Question, full: bool = True) -> dict:
         "options": q.options,
         "source_id": q.source_id,
         "verify_status": q.verify_status,
+        "images": q.images,
     }
     if full:
         out.update(
@@ -87,9 +90,19 @@ def apply_verification(q: Question, res: dict) -> None:
 
 def verify_one(db: Session, q: Question) -> dict:
     cfg = store.openai_config(db)
+    pics = [
+        (i.mime, i.data) for i in db.query(Image).filter(Image.id.in_(q.images or [0])).limit(gpt.MAX_VISION_IMAGES)
+    ]
     res = gpt.verify_question(
         cfg,
-        {"text": q.text, "options": q.options, "correct": q.correct, "answer_text": q.answer_text, "qtype": q.qtype},
+        {
+            "text": q.text,
+            "options": q.options,
+            "correct": q.correct,
+            "answer_text": q.answer_text,
+            "qtype": q.qtype,
+            "images": pics,
+        },
     )
     apply_verification(q, res)
     db.commit()

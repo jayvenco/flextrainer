@@ -14,7 +14,7 @@ Python 3.12, FastAPI, SQLAlchemy, Jinja2, vanilla JS, SQLite (WAL) in `/app/data
 - `app/config.py` env config + validation (clear startup errors); `app/logging_setup.py` key=value logs to stdout and
   `/app/data/logs/app.log`
 - `app/routers/pages.py` HTML + login + PWA files; `app/routers/ui.py` cookie-only JSON endpoints (no public/token API)
-- `app/services/`: `extract.py` (PDF/docx/md text), `parser.py` (heuristic question parser), `scraper.py` (SSRF-safe
+- `app/services/`: `extract.py` (PDF/docx/md text + pictures), `images.py` (picture validation, storage in SQLite), `parser.py` (heuristic question parser), `scraper.py` (SSRF-safe
   fetch + HTML to text), `gpt.py` (OpenAI-compatible checks and AI-assisted import), `exams.py` (questions, sessions,
   progress, background bulk check), `backup.py`, `store.py` (settings, encrypted API key), `updates.py`
 - `app/static/` css (5 themes via `[data-theme]`, AA contrast checked), js (no inline scripts: CSP `script-src 'self'`),
