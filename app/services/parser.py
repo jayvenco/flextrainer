@@ -90,6 +90,43 @@ def _split_key(lines: list[str]) -> tuple[list[str], dict[int, str]]:
     return lines, {}
 
 
+INLINE_ANS_RE = re.compile(
+    r"\s+(?=(?:correct\s+|juiste\s+)?(?:answers?|antwoord(?:en)?)\s*(?:is|are)?\s*[:=]\s*\S)", re.I
+)
+INLINE_NEXT_RE = re.compile(
+    r"((?:answers?|antwoord(?:en)?)\s*[:=]\s*[A-Ha-h](?:\s*[,;&/]\s*[A-Ha-h])*)\s+(?=(?:Q|Question|Vraag)?\s*\d{1,4}\s*[\).:]\s+\S)",
+    re.I,
+)
+INLINE_OPT_RE = re.compile(r"(?:(?<=\s)|^)\(?([A-Ha-h])[\).]\s+(?=\S)")
+
+
+def _explode_inline(line: str) -> list[str]:
+    """Split lines where PDF/Word extraction glued options, answers or the next question together."""
+    if len(line) < 40:
+        return [line]
+    line = INLINE_NEXT_RE.sub(lambda m: m.group(1) + "\n", line)
+    parts: list[str] = []
+    for chunk in line.split("\n"):
+        chunk = INLINE_ANS_RE.sub("\n", chunk) if not ANS_RE.match(chunk.strip()) else chunk
+        for piece in chunk.split("\n"):
+            marks = [m for m in INLINE_OPT_RE.finditer(piece)]
+            # accept only a run that starts at A and continues B, C, ... (avoids splitting normal prose)
+            run: list[re.Match] = []
+            for m in marks:
+                want = LETTERS[len(run)] if len(run) < len(LETTERS) else ""
+                if m.group(1).upper() == want:
+                    run.append(m)
+            if len(run) >= 2:
+                cuts = [m.start() for m in run]
+                if cuts[0] > 0:
+                    parts.append(piece[: cuts[0]].rstrip())
+                for a, b in zip(cuts, cuts[1:] + [len(piece)], strict=True):
+                    parts.append(piece[a:b].strip())
+            else:
+                parts.append(piece)
+    return [p for p in parts if p.strip()]
+
+
 def _finish(q: ParsedQuestion | None, out: list[ParsedQuestion]) -> None:
     if not q:
         return
@@ -121,7 +158,7 @@ def _finish(q: ParsedQuestion | None, out: list[ParsedQuestion]) -> None:
 
 
 def parse_questions(raw: str) -> list[dict]:
-    lines = clean_markdown(raw.replace("\r", "")).split("\n")
+    lines = [piece for ln in clean_markdown(raw.replace("\r", "")).split("\n") for piece in _explode_inline(ln)]
     lines, key = _split_key(lines)
     out: list[ParsedQuestion] = []
     cur: ParsedQuestion | None = None
@@ -135,7 +172,25 @@ def parse_questions(raw: str) -> list[dict]:
         mode = "q"
         return cur
 
-    for line in lines:
+    def new_question_ahead(i: int) -> int | None:
+        """Index of the "A." option that follows the (up to 3) text lines starting at i, if they look like a question."""
+        seen = 0
+        for k in range(i, min(len(lines), i + 4)):
+            t = lines[k].strip()
+            if not t:
+                continue
+            m = OPT_RE.match(t)
+            if (m and m["l"].upper() == "A") or CHK_RE.match(t):
+                return k if seen else None
+            if ANS_RE.match(t) or EXPL_RE.match(t) or Q_RE.match(t) or Q_HEAD_RE.match(t) or m:
+                return None
+            seen += 1
+        return None
+
+    skip_to = -1
+    for idx, line in enumerate(lines):
+        if idx < skip_to:
+            continue
         s = line.strip()
         if not s:
             continue
@@ -186,6 +241,14 @@ def parse_questions(raw: str) -> list[dict]:
             start("", int(m["n"]))
             pending = []
             continue
+        # an unnumbered question directly after the previous one (its text would otherwise be glued to it)
+        if cur is not None and mode in {"opt", "ans", "expl"} and (mode != "opt" or len(cur.options) >= 2):
+            k = new_question_ahead(idx)
+            if k is not None:
+                start(" ".join(t.strip() for t in lines[idx:k] if t.strip()), None)
+                pending = []
+                skip_to = k
+                continue
         # continuation line
         if cur is None:
             pending.append(s)

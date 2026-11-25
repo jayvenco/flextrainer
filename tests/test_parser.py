@@ -89,3 +89,38 @@ def test_rejects_bad_files():
         extract.extract_text("x.exe", b"abc")
     with pytest.raises(extract.ExtractError):
         extract.extract_text("x.docx", b"not a zip")
+
+
+def test_unnumbered_consecutive_questions_are_split():
+    text = (
+        "Which port does HTTPS use?\nA. 80\nB. 443\nAnswer: B\n"
+        "Which layer routes packets?\nA. Data link\nB. Network\nC. Session\nAnswer: B\nExplanation: Layer 3.\n"
+        "What does DNS resolve?\nA. Names to addresses\nB. Files to folders\n"
+    )
+    qs = parse_questions(text)
+    assert [q["text"] for q in qs] == [
+        "Which port does HTTPS use?",
+        "Which layer routes packets?",
+        "What does DNS resolve?",
+    ]
+    assert qs[0]["correct"] == [1] and qs[1]["correct"] == [1] and qs[1]["explanation"] == "Layer 3."
+    assert qs[2]["options"] == ["Names to addresses", "Files to folders"]
+
+
+def test_glued_pdf_lines_are_split():
+    text = (
+        "1. Which is a mammal? A. Shark B. Dolphin C. Trout Answer: B 2. Capital of Italy? A. Rome B. Milan "
+        "Answer: A 3. What is 2+2? A) 3 B) 4 Antwoord: B\n"
+    )
+    qs = parse_questions(text)
+    assert len(qs) == 3
+    assert qs[0]["options"] == ["Shark", "Dolphin", "Trout"] and qs[0]["correct"] == [1]
+    assert qs[1]["text"] == "Capital of Italy?" and qs[1]["correct"] == [0]
+    assert qs[2]["correct"] == [1]
+
+
+def test_prose_with_letters_is_not_split():
+    qs = parse_questions(
+        "1. Vitamin A. B. and C are important, so which one is a vitamin found in carrots and oranges?\nA. Vitamin A\nB. Iron\nAnswer: A\n"
+    )
+    assert len(qs) == 1 and qs[0]["options"] == ["Vitamin A", "Iron"]

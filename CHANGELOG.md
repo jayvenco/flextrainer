@@ -3,6 +3,9 @@
 All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachangelog.com), versions follow SemVer.
 
 ## [Unreleased]
+### Fixed
+- Import: questions glued together are now split: unnumbered consecutive questions, and PDF/Word text where options, answers and the next question ended up on one line.
+
 ### Added
 - Practice: **Previous question** (button, `P` or `←`) shows already answered questions read-only, with your answer and the result; progress is not changed.
 - Settings: Appearance section with theme, font and **text size** (85-175%), saved per account. Existing databases are upgraded automatically.
