@@ -24,10 +24,21 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          # One plain image manifest (no attestation index): that is what Unraid compares to detect updates.
+          # One plain image manifest (no attestation index) in the classic Docker media type. Unraid's update
+          # check asks the registry for Docker manifests only; an OCI manifest makes GHCR answer 404 and the
+          # Docker tab then cannot offer updates.
+          outputs: type=registry,oci-mediatypes=false
           provenance: false
           sbom: false
           tags: |
             ghcr.io/jayvenco/flextrainer:latest
             ghcr.io/jayvenco/flextrainer:${{ github.sha }}
+      - name: Check that Unraid can see the image (Docker manifest, anonymous)
+        run: |
+          set -e
+          TOKEN=$(curl -fsS "https://ghcr.io/token?scope=repository:jayvenco/flextrainer:pull" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            https://ghcr.io/v2/jayvenco/flextrainer/manifests/latest)
+          echo "manifest status: $code"
+          [ "$code" = "200" ] || { echo "Unraid update check would fail (is the package public?)"; exit 1; }

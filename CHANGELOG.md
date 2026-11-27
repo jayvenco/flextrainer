@@ -8,6 +8,7 @@ All notable changes to FlexTrainer. Format: [Keep a Changelog](https://keepachan
 - New dependency: Pillow (picture validation and scaling).
 
 ### Fixed
+- Unraid Docker tab could not detect or apply updates: the image was published with OCI manifests, which GHCR does not serve to Unraid's Docker-only update check (HTTP 404). It is now published with Docker manifest types and the workflow verifies this after every push.
 - A corrupt Word file now gives a clear error instead of a server error.
 - Import: questions glued together are now split: unnumbered consecutive questions, and PDF/Word text where options, answers and the next question ended up on one line.
 

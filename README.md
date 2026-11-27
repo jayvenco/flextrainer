@@ -61,7 +61,10 @@ docker compose up --build
 Open <http://localhost:8822>.
 
 ## Update
-Pull the new image: on Unraid use **Docker tab → force update** (or re-run the install script). Everything lives in the
+Pull the new image: on Unraid open the **Docker tab**, click **Check for Updates** and then **apply update** next to
+FlexTrainer (or **force update**; re-running the install script works too). The image is published with classic Docker
+manifest types because Unraid's update check cannot read OCI manifests from GHCR. If a container shows "not available",
+run the install script once so it gets its template, then check again. Everything lives in the
 data volume, so the database, backups, logs and the session secret survive updates and container re-creation. The About
 page shows a non-intrusive notice when a newer release exists (`UPDATE_CHECK=false` disables it).
 
